@@ -1,8 +1,6 @@
 /*
  * G8RTOS_CriticalSection.h
  *
- *  Created on: Dec 11, 2016
- *      Author: Raz Aloni
  */
 
 #ifndef G8RTOS_CRITICALSECTION_H_
