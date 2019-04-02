@@ -1,8 +1,18 @@
 #define OPT
 
-// preprocessor options
-// ORIG - original RTOS functions
-// OPT  - automatically sorts the priority of threads on AddThread
+/*
+ *  Preprocessor Scheduler Selection
+ *  ------------------------------------------------------------------------
+ *
+ *  ORIG -  Original RTOS sorts through each thread to determine highest
+ *          priority. Also incorporates aging to make sure that low priority
+ *          threads will not starve.
+ *
+ *  OPT  -  Automatically sorts the priority of threads on AddThread.
+ *          Manages highest priority thread with head thread pointer.
+ *
+ * -------------------------------------------------------------------------
+ */
 
 /*
  * G8RTOS_Scheduler.c

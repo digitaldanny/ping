@@ -1,5 +1,12 @@
 #define MAIN
 
+/*
+ *
+ *  main.c
+ *
+ *
+ */
+
 #include "G8RTOS.h"
 #include "LCD_empty.h"
 #include "threads.h"

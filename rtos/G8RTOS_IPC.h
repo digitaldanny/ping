@@ -1,8 +1,5 @@
 /*
  * G8RTOS_IPC.h
- *
- *  Created on: Jan 10, 2017
- *      Author: Daniel Gonzalez
  */
 
 #ifndef G8RTOS_G8RTOS_IPC_H_

@@ -1,8 +1,5 @@
 /*
  * G8RTOS_Structure.h
- *
- *  Created on: Jan 12, 2017
- *      Author: Raz Aloni
  */
 
 #ifndef G8RTOS_STRUCTURES_H_
