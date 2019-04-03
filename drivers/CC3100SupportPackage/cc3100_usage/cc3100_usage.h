@@ -39,7 +39,8 @@
 typedef enum
 {
     Client = 0,
-    Host = 1
+    Host = 1,
+    None = 2
 }playerType;
 
 /* IP addressed of server side socket.
