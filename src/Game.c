@@ -1,8 +1,12 @@
 /*
  * Game.c
  *
- *  Created on: Apr 2, 2019
- *      Author: dhami
+ *  Created     : 4/2/2019
+ *  Last Edit   : 4/2/2019
+ *
+ *  UPDATES     :
+ *  4/2/2019    : Initialized threads.
+ *
  */
 
 #include "Game.h"
