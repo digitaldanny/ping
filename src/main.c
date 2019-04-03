@@ -1,14 +1,23 @@
 #define MAIN
 
+// To run game with different routers, go to the
+// cc3100_usage.h and sl_common.h header files and
+// adjust the preprocessor directive.
+
 /*
  *
  *  main.c
  *
+ *  UPDATES :
+ *  3/29/2019   : File initialization.
+ *  4/2/2019    : Connect to hotspot as Host or Client.
  *
  */
 
 #include "G8RTOS.h"
+#include "cc3100_usage.h"
 #include "LCD_empty.h"
+#include "Game.h"
 #include "threads.h"
 
 #define TP_ENABLE   1
@@ -22,6 +31,7 @@ void main(void)
 
     // Initialize and launch RTOS
     G8RTOS_Init();
+    initCC3100(Host);
     LCD_Init(TP_DISABLE);
 
     // Add threads
