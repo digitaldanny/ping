@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "G8RTOS.h"
 #include "cc3100_usage.h"
-#include "LCDLib.h"
+#include "LCD_empty.h"
 /*********************************************** Includes ********************************************************************/
 
 /*********************************************** Externs ********************************************************************/
@@ -15,9 +15,23 @@
 
 /*********************************************** Externs ********************************************************************/
 
+// CONFIGURATION MACROS -------------------------------------------------------------
+#define MENU_TEXT_COLOR     LCD_YELLOW
+#define MENU_BG_COLOR       LCD_BLACK
+
 /*********************************************** Global Defines ********************************************************************/
+#define RED_ON              P2->OUT |= BIT0
+#define RED_OFF             P2->OUT &= ~BIT0
+#define GREEN_ON            P2->OUT |= BIT1
+#define GREEN_OFF           P2->OUT &= ~BIT1
+#define BLUE_ON             P2->OUT |= BIT2
+#define BLUE_OFF            P2->OUT &= ~BIT2
+
 #define MAX_NUM_OF_PLAYERS  2
 #define MAX_NUM_OF_BALLS    8
+
+#define DEFAULT_PRIORITY    15
+#define AGING_PRIORITY      10
 
 // This game can actually be played with 4 players... a little bit more challenging, but doable! 
 #define NUM_OF_PLAYERS_PLAYING 2
@@ -84,14 +98,18 @@
 typedef enum
 {
     PLAYER_RED = LCD_RED,
-    PLAYER_BLUE = LCD_BLUE
+    PLAYER_BLUE = LCD_BLUE,
+    PLAYER_GREEN = LCD_GREEN,
+    PLAYER_YELLOW = LCD_YELLOW
 }playerColor;
 
 /* Enums for player numbers */
 typedef enum
 {
     BOTTOM = 0,
-    TOP = 1
+    TOP = 1,
+    RIGHT = 2,
+    LEFT = 3
 }playerPosition;
 
 /*********************************************** Global Defines ********************************************************************/
@@ -168,6 +186,14 @@ typedef struct
 }PrevPlayer_t;
 /*********************************************** Data Structures ********************************************************************/
 
+/*********************************************** Game Functions *********************************************************************/
+// initialize interrupts for input buttons B0, B1, B2, B3
+// on ports 4 and 5.
+void buttons_init(void);
+
+// Any animations or text used for the main menu is displayed
+// with this function
+void writeMainMenu( uint16_t Color );
 
 /*********************************************** Client Threads *********************************************************************/
 /*
