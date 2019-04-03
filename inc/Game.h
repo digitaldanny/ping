@@ -4,9 +4,12 @@
 /*********************************************** Includes ********************************************************************/
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "G8RTOS.h"
 #include "cc3100_usage.h"
 #include "LCD_empty.h"
+#include "time.h"
+#include "math.h"
 /*********************************************** Includes ********************************************************************/
 
 /*********************************************** Externs ********************************************************************/
@@ -29,6 +32,7 @@
 
 #define MAX_NUM_OF_PLAYERS  2
 #define MAX_NUM_OF_BALLS    8
+#define BALL_GEN_SLEEP      10000 // 10 second increments increasing linearly
 
 #define DEFAULT_PRIORITY    15
 #define AGING_PRIORITY      10
@@ -43,6 +47,7 @@
 #define ARENA_MAX_Y                  240
 
 /* Size of objects */
+#define PADDLE_OFFSET                1
 #define PADDLE_LEN                   64
 #define PADDLE_LEN_D2                (PADDLE_LEN >> 1)
 #define PADDLE_WID                   4
@@ -67,6 +72,7 @@
 
 /* Amount of allowable space for collisions with the sides of paddles */
 #define WIGGLE_ROOM                  2
+#define JOYSTICK_BIAS                0
 
 /* Value for velocities from contact with paddles */
 #define _1_3_PADDLE                  11
@@ -83,6 +89,7 @@
 
 /* Maximum ball speed */
 #define MAX_BALL_SPEED               6
+#define MIN_BALL_SPEED               1
 
 /* Background color - Black */
 #define BACK_COLOR                   LCD_BLACK
