@@ -479,6 +479,8 @@ sched_err_code_t G8RTOS_AddThread__Def_Starvation(void (*threadToAdd)(void), uin
  *  - Initializes the stack for the provided thread to hold a "fake context"
  *  - Sets stack tcb stack pointer to top of thread stack
  *  - Sets up the next and previous tcb pointers in a round robin fashion
+ *  - Starvation age is the number of SysTicks the thread has not run before
+ *      temporary priority is auto boosted to high priority (currently level 10).
  * Param "threadToAdd": Void-Void Function to add as preemptable main thread
  * Returns: Error code for adding threads
  */
@@ -757,6 +759,7 @@ OrganizedPriorityObject_t FindEmptyTcb(uint8_t priority)
 
 #if defined OPT
 // Scheduling algorithm using priority instead of round robin
+// NOTE: **Update to include aging and dynamic quantum time later**
 void G8RTOS_Scheduler_Priority(void)
 {
     tcb_t* tempThreadPtr = head;
