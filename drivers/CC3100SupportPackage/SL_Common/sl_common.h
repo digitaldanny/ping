@@ -1,3 +1,14 @@
+#define DANNY_HOTSPOT
+
+// PREPROCESSOR DIRECTIVES
+// Configurations dependent on which router the
+// device needs to connect to.
+// ----------------------------------------------------
+// DANNY_HOTSPOT :
+// JAKE_HOTSPOT  :
+// DANNY_ROUTER  :
+// ----------------------------------------------------
+
 /*
  * sl_config.h - get time sample application
  *
@@ -74,24 +85,26 @@ extern "C" {
  * Values for below macros shall be modified per the access-point's (AP) properties
  * SimpleLink device will connect to following AP when the application is executed
  */
-#define SSID_NAME       "NETGEAR47"         /* Access point name to connect to. */
-#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2    /* Security type of the Access piont */
-//#define SEC_TYPE        SL_SEC_TYPE_OPEN    /* Security type of the Access piont */
-#define PASSKEY         "quaintcoconut392"                  /* Password in case of secure AP */
-#define PASSKEY_LEN     pal_Strlen(PASSKEY)  /* Password length in case of secure AP */
+#ifdef DANNY_HOTSPOT
+#define SSID_NAME       "Daniel"  /* Access point name to connect to. */
+#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
+//#define SEC_TYPE        SL_SEC_TYPE_OPEN          /* Security type of the Access piont */
+#define PASSKEY         "eel4930pass"               /* Password in case of secure AP */
+#define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
+#endif
 
 /* Configuration of the device when it comes up in AP mode */
-#define SSID_AP_MODE       "<ap_mode_ssid>"       /* SSID of the CC3100 in AP mode */
-#define PASSWORD_AP_MODE   ""                  /* Password of CC3100 AP */
-#define SEC_TYPE_AP_MODE   SL_SEC_TYPE_OPEN    /* Can take SL_SEC_TYPE_WEP or
-                                                * SL_SEC_TYPE_WPA as well */
+#define SSID_AP_MODE       "Daniel"         /* SSID of the CC3100 in AP mode */
+#define PASSWORD_AP_MODE   "eel4930pass"                      /* Password of CC3100 AP */
+#define SEC_TYPE_AP_MODE   SL_SEC_TYPE_OPEN         /* Can take SL_SEC_TYPE_WEP or
+                                                     * SL_SEC_TYPE_WPA as well */
 
 /*
  * Values for below macros shall be modified based on current time
  */
-#define DATE        24      /* Current Date */
-#define MONTH       7       /* Month */
-#define YEAR        2014    /* Current year */
+#define DATE        2      /* Current Date */
+#define MONTH       4       /* Month */
+#define YEAR        2019    /* Current year */
 #define HOUR        17      /* Time - hours */
 #define MINUTE      30      /* Time - minutes */
 #define SECOND      0       /* Time - seconds */
