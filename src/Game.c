@@ -1,4 +1,4 @@
-#define SINGLE
+#define MULTI
 
 // PREPROCESSOR DIRECTIVES :
 // SINGLE   : Use this configuration if debugging with one board. CreateGame doesn't
@@ -9,7 +9,7 @@
  * Game.c
  *
  *  Created     : 4/2/2019
- *  Last Edit   : 4/2/2019
+ *  Last Edit   : 4/3/2019
  *
  *  UPDATES     :
  *  4/2/2019    : Initialized threads and game functions.
@@ -67,7 +67,7 @@ void buttons_init(void)
 void writeMainMenu( uint16_t Color )
 {
     LCD_Text(0, 0, "B0 -> HOST", Color);
-    LCD_Text(0, 16, "B2 -> HOST", Color);
+    LCD_Text(0, 16, "B2 -> CLIENT", Color);
     srand(time(0));  // generated for later use
 }
 
@@ -150,18 +150,22 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
 }
 
 /*
- * Function updates ball position on screen
+ * Function updates ball position on screen if it is required
  */
 void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_t outColor)
 {
-    // erase the old ball first
-    LCD_DrawRectangle(previousBall->CenterX, previousBall->CenterX + BALL_SIZE,
-                      previousBall->CenterY, previousBall->CenterY + BALL_SIZE, BACK_COLOR);
+    // only update the ball if it is in a different position
+    if (    (previousBall->CenterX != currentBall->currentCenterX) &&
+            (previousBall->CenterY != currentBall->currentCenterY)      )
+    {
+        // erase the old ball first
+        LCD_DrawRectangle(previousBall->CenterX, previousBall->CenterX + BALL_SIZE,
+                          previousBall->CenterY, previousBall->CenterY + BALL_SIZE, BACK_COLOR);
 
-    // draw the new ball next
-    LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
-                      currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
-
+        // draw the new ball next
+        LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
+                          currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
+    }
 }
 
 /*
@@ -248,9 +252,7 @@ void CreateGame()
 
 #ifdef MULTI
     // 3. Try to receive packet from the client until return SUCCESS == 0
-    int test = 5;
-    ReceiveData((_u8*)&test, sizeof(test));
-    while( ReceiveData((_u8*)&gamestate.player, sizeof(gamestate.player)) );
+    while( ReceiveData((_u8*)&gamestate.player, sizeof(gamestate.player)) != 0 );
 
     // 4. Acknowledge client by telling them they joined the game.
     gamestate.player.joined = true;
@@ -340,13 +342,13 @@ void ReadJoystickHost()
         // the player velocity
         switch(avg) {
         case -10000 ... -6000   : displacement = 10;   break;
-        case -5999 ... -4000    : displacement = 7;    break;
-        case -3999 ... -2000    : displacement = 5;    break;
-        case -1999 ... -750     : displacement = 3;    break;
+        case -5999 ... -4000    : displacement = 5;    break;
+        case -3999 ... -2000    : displacement = 3;    break;
+        case -1999 ... -750     : displacement = 1;    break;
         case -749  ... 750      : displacement = 0;     break;
-        case 751   ... 2000     : displacement = -3;     break;
-        case 2001  ... 4000     : displacement = -5;     break;
-        case 4001  ... 6000     : displacement = -7;     break;
+        case 751   ... 2000     : displacement = -1;     break;
+        case 2001  ... 4000     : displacement = -3;     break;
+        case 4001  ... 6000     : displacement = -5;     break;
         case 6001  ... 10000    : displacement = -10;    break;
         default                 : displacement = 0;     break;
         }
@@ -391,13 +393,14 @@ void MoveBall()
         {
             ball->alive = 1;
             ball->color = LCD_WHITE;
-            ball->currentCenterX = BALL_SIZE * (rand() % (ARENA_MAX_X/BALL_SIZE)) + ARENA_MIN_X;
+            ball->currentCenterX = BALL_SIZE * (rand() % ((ARENA_MAX_X - ARENA_MIN_X + 1)/BALL_SIZE) ) + ARENA_MIN_X;
             ball->currentCenterY = BALL_SIZE * (rand() % (ARENA_MAX_Y/BALL_SIZE));
             ballCount++;
             break;
         }
     }
 
+    new_ball = *ball; // initialize the new color, etc
     int16_t xvel = rand() % MAX_BALL_SPEED + 1;
     int16_t yvel = rand() % MAX_BALL_SPEED + 1;
 
@@ -407,22 +410,77 @@ void MoveBall()
 
         // collision detection if reaching the left or right side borders
         // UPDATE TO USE MINKOWSKI ALGORITHM.
-        if ( ball->currentCenterX + BALL_SIZE >= ARENA_MAX_X
-                || ball->currentCenterX <= ARENA_MIN_X      )
+        if ( ball->currentCenterX + BALL_SIZE >= ARENA_MAX_X - WIGGLE_ROOM
+                || ball->currentCenterX <= ARENA_MIN_X + WIGGLE_ROOM + 1    )
         {
             xvel *= -1; // go the opposite direction
         }
 
         // collision detection and color change if the ball hits a player
+        int32_t w;
+        int32_t h;
+        int32_t dx;
+        int32_t dy;
+        int32_t BcenterY;
+        for (int i = 0; i < playerCount; i++)
+        {
 
-        // player scores
+            if ( gamestate.players[i].position == BOTTOM )  BcenterY = ARENA_MAX_Y - PADDLE_WID_D2;
+            if ( gamestate.players[i].position == TOP )     BcenterY = ARENA_MIN_Y + PADDLE_WID_D2;
+
+            // Minkowski algorithm for collision
+            w = (BALL_SIZE + PADDLE_LEN) >> 1;      // w = .5 * (A.width() + B.width())
+            h = (BALL_SIZE + PADDLE_WID) >> 1;      // h = .5 * (A.height() + B.height())
+            dx = ball->currentCenterX - gamestate.players[i].currentCenter; // A.centerX() - B.centerX()
+            dy = ball->currentCenterY - BcenterY;   // A.centerY() - B.centerY()
+
+            int32_t wy = w*dy;
+            int32_t hx = h*dx;
+
+            // CHECK IF THERE IS A COLLISION ------------------------
+            if ( abs(dx) <= w + WIGGLE_ROOM && abs(dy) <= h + WIGGLE_ROOM )
+            {
+                // check where the collision is happening at
+                if ( wy > hx - WIGGLE_ROOM )
+                {
+                    // collision at the TOP
+                    if ( wy > -hx - WIGGLE_ROOM && gamestate.players[i].position == BOTTOM )
+                    {
+                        yvel *= -1;
+                    }
+
+                    // collision on the LEFT
+                    else
+                    {
+                        xvel *= -1;
+                        yvel *= -1;
+                    }
+                }
+
+                else
+                {
+                    // collision on the RIGHT
+                    if ( wy > -hx + WIGGLE_ROOM)
+                    {
+                        yvel *= -1;
+                        xvel *= -1;
+                    }
+
+                    // collision on the BOTTOM (CHECKING TO MAKE SURE THIS IS THE TOP PADDLE)
+                    else if ( gamestate.players[i].position == TOP )
+                    {
+                        yvel *= -1;
+                    }
+                }
+            }
+
+            // PLAYER SCORES ---------------------------
+        }
 
         // attempt to move ball in current direction
         new_ball.currentCenterX += xvel;
         new_ball.currentCenterY += yvel;
 
-        // update ball on screen
-        // UpdateBallOnScreen(ball, &new_ball, new_ball.color);
         *ball = new_ball;
         sleep(35);
     }
@@ -474,7 +532,7 @@ void JoinGame()
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
     // 3. Wait for server response showing that it acknowledges the new player
-    while( ReceiveData( (_u8*)&player.joined, sizeof(player.joined)) );
+    while( ReceiveData( (_u8*)&player.joined, sizeof(player.joined)) != 0 );
 
     // 4. If you've joined the game, acknowledge you've joined to the host
     //      and show connection through LED.
@@ -543,10 +601,16 @@ void EndOfGameClient()
 
 // ===================== COMMON COMMON COMMON COMMON =========================
 /*
- * Thread to draw all the objects in the game
+ * SUMMARY: Thread to draw all the objects in the game
+ *
+ * DESCRIPTION:
+ * First, this thread updates all ALIVE balls on screen that have moved.
+ * Second, the thread updates all players who have moved.
  */
 void DrawObjects()
 {
+    Ball_t * ball;
+
     // store all previous locations of the players to see if
     // it needs to be updated.
     PrevPlayer_t prevPlayers[MAX_NUM_OF_PLAYERS];
@@ -566,7 +630,7 @@ void DrawObjects()
 
     while(1)
     {
-        // Draw players --------------------
+        // Draw players ---------------------------------------
         for (int i = 0; i < playerCount; i++)
         {
             // This player is on its first run. Draw
@@ -580,14 +644,27 @@ void DrawObjects()
             prevPlayers[i].Center = gamestate.players[i].currentCenter;
         }
 
-        // Redraw balls --------------------
+        // Redraw all balls that are alive --------------------
         for (int i = 0; i < ballCount; i++)
         {
-            // if already made..
-            // UpdateBallOnScreen(previousBall, currentBall, outColor);
+            if (gamestate.balls[i].alive)
+            {
+                ball = &gamestate.balls[i];
 
-            // else if this is the first run...
-            // ??
+                // this is the ball's first run + it's alive
+                if ( prevBalls[i].CenterX == -1 && prevBalls[i].CenterY == -1 )
+                {
+                    LCD_DrawRectangle(ball->currentCenterX, ball->currentCenterX + BALL_SIZE,
+                                      ball->currentCenterY, ball->currentCenterY + BALL_SIZE, ball->color);
+                }
+
+                // if the ball is already made and just needs an update
+                else UpdateBallOnScreen(&prevBalls[i], ball, ball->color);
+
+                // update the previous ball array
+                prevBalls[i].CenterX = ball->currentCenterX;
+                prevBalls[i].CenterY = ball->currentCenterY;
+            }
         }
 
         // Refresh rate --------------------
