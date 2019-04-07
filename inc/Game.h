@@ -32,7 +32,7 @@
 
 #define MAX_NUM_OF_PLAYERS  2
 #define MAX_NUM_OF_BALLS    8
-#define BALL_GEN_SLEEP      10000 // 10 second increments increasing linearly
+#define BALL_GEN_SLEEP      2500 // 2.5 second increments increasing linearly
 
 #define DEFAULT_PRIORITY    15
 #define AGING_PRIORITY      10
@@ -88,8 +88,8 @@
 #define VERT_CENTER_MIN_BALL         (ARENA_MIN_Y + BALL_SIZE_D2)
 
 /* Maximum ball speed */
-#define MAX_BALL_SPEED               6
-#define MIN_BALL_SPEED               1
+#define MAX_BALL_SPEED               7
+#define MIN_BALL_SPEED               3
 
 /* Background color - Black */
 #define BACK_COLOR                   LCD_BLACK
