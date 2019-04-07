@@ -173,6 +173,29 @@ void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_
  */
 void InitBoardState()
 {
+    // declare variables
+    GeneralPlayerInfo_t * tempPlayer;
+
+    // 1. Initialize players' general parameters
+    // player 1 initializations...
+    tempPlayer = &gamestate.players[0];
+    tempPlayer->color = PLAYER_RED;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = BOTTOM;
+    playerCount++;
+
+    // player 2 initializations...
+    tempPlayer = &gamestate.players[1];
+    tempPlayer->color = PLAYER_BLUE;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = TOP;
+
+    // initialize number of points for the players. Don't include this
+    // in the initBoard function so that we can use that function to
+    // restart the game without clearing the scores.
+    gamestate.overallScores[0] = 0;
+    gamestate.overallScores[1] = 0;
+
     // initialize balls
     Ball_t * tempBall;
     for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
@@ -223,42 +246,52 @@ void InitBoardState()
  */
 void CreateGame()
 {
-    // declare variables
-    GeneralPlayerInfo_t * tempPlayer;
-
-    // 1. Initialize players' general parameters
-    // player 1 initializations...
-    tempPlayer = &gamestate.players[0];
-    tempPlayer->color = PLAYER_RED;
-    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
-    tempPlayer->position = BOTTOM;
-    playerCount++;
-
-    // player 2 initializations...
-    tempPlayer = &gamestate.players[1];
-    tempPlayer->color = PLAYER_BLUE;
-    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
-    tempPlayer->position = TOP;
-
-    // initialize number of points for the players. Don't include this
-    // in the initBoard function so that we can use that function to
-    // restart the game without clearing the scores.
-    gamestate.overallScores[0] = 0;
-    gamestate.overallScores[1] = 0;
+    // 1. Initialize players complete in InitBoard
 
     // 2. Establish connection with client
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
-    // 3. Try to receive packet from the client until return SUCCESS == 0
-    while( ReceiveData((_u8*)&gamestate.player, sizeof(gamestate.player)) != 0 );
+    // 3. Try to receive packet from the client until return SUCCESS
+    uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
+    while( handshake != 'C' )
+    {
+        ReceiveData((_u8*)&handshake, sizeof(handshake));
+    }
 
-    // 4. Acknowledge client by telling them they joined the game.
-    gamestate.player.joined = true;
-    SendData( (_u8*)&gamestate.player.joined ,
-              gamestate.player.IP_address    ,
-              sizeof(gamestate.player.joined) );
+    // STATIC INLINE THIS ---------------------------------------------------------------------------------
+    uint8_t buff_ip[4];
+    uint8_t buff_displacement[2];
+
+    // once the synchronization byte has been received,
+    // the host is ready to receive the client's ip so it
+    // can begin sending messages back to it. Because the bytes
+    // are sent MSB first and MSB begins at highest address of
+    // gamestate.player.IP_address, receieved data must first
+    // be stored in a buffer and reorganized.
+    ReceiveData( (_u8*)&gamestate.player.IP_address     , 4); // ip address
+    ReceiveData( (_u8*)&gamestate.player.displacement   , 2); // ip address
+    ReceiveData( (_u8*)&gamestate.player.playerNumber   , 1);
+    ReceiveData( (_u8*)&gamestate.player.ready          , 1);
+    ReceiveData( (_u8*)&gamestate.player.joined         , 1);
+    ReceiveData( (_u8*)&gamestate.player.acknowledge    , 1);
+
+    // finish organizing received bytes by assigning it to the gamestate
+    // player AFTER all data transfers are complete.
+    // gamestate.player.IP_address = buff_ip[0] << 24 | buff_ip[1] << 16 | buff_ip[2] << 8 | buff_ip[3] << 0;
+    // gamestate.player.displacement = buff_displacement[0] << 8 | buff_displacement[1] << 0;
+
+    // 4. Acknowledge client to tell them they joined the game.
+    handshake = 'H';
+    SendData( (_u8*)&handshake, gamestate.player.IP_address, sizeof(handshake) );
+
+    // Wait for client to sync with host by acknowledging that
+    // it received the host message.
+    while( handshake != 'C' )
+    {
+        ReceiveData((_u8*)&handshake, sizeof(handshake));
+    }
 #endif
 
     GREEN_ON; // use LED to indicate WiFi connection as HOST
@@ -524,15 +557,28 @@ void JoinGame()
     player.ready = false;
     playerCount++;
 
-    // 2. Send player data into the host.
-    SendData( (_u8*)&player, player.IP_address, sizeof(player) );
-
     // hardware initialization
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
-    // 3. Wait for server response showing that it acknowledges the new player
-    while( ReceiveData( (_u8*)&player.joined, sizeof(player.joined)) != 0 );
+#ifdef MULTI
+    // 2. Send player data into the host.
+    // 3. Try to send player packet to host until host acknowledges
+    //    that it received the player information.
+    uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
+    while( handshake != 'H' )
+    {
+        handshake = 'C';
+        SendData(       (_u8*)&handshake, HOST_IP_ADDR, 1               );   // start synchronization
+        SendData(       (_u8*)&player, HOST_IP_ADDR, sizeof(player)     );   // send MSB first of all player data
+        ReceiveData(    (_u8*)&handshake, sizeof(handshake)             );   // check if host ackknowledges
+    }
+
+    // Sync with host by telling it that client has received the
+    // previous message
+    handshake = 'C';
+    SendData( (_u8*)&handshake, HOST_IP_ADDR, 1 );
+#endif
 
     // 4. If you've joined the game, acknowledge you've joined to the host
     //      and show connection through LED.
