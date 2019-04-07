@@ -1,9 +1,14 @@
 #define MULTI
+#define GAMESTATE
 
-// PREPROCESSOR DIRECTIVES :
-// SINGLE   : Use this configuration if debugging with one board. CreateGame doesn't
-//             wait to read data from the client.
-// MULTI    : Primary mode allows both boards to communicate with each other.
+/*
+ * PREPROCESSOR DIRECTIVES :
+ * SINGLE   : Use this configuration if debugging with one board. CreateGame doesn't
+ *             wait to read data from the client.
+ * MULTI    : Primary mode allows both boards to communicate with each other.
+ * PACKETS  : Fill and empty packets every time a message is sent over WiFi
+ * GAMESTATE : Directly send the gamestate without filling packets
+ */
 
 /*
  * Game.c
@@ -34,9 +39,39 @@ uint8_t playerCount = 0;
 uint8_t ballCount = 0;
 
 // ======================      SEMAPHORES          ==========================
-semaphore_t CLIENT_PLAYERDATA_SEMAPHORE;
+semaphore_t CC3100_SEMAPHORE;
 
 // ======================     GAME FUNCTIONS       ==========================
+
+// This function copies over a gamestate into a new
+// packet to be sent over Wi-Fi.
+void fillPacket ( GameState_t * gs, GameState_t * packet )
+{
+    packet->gameDone = gs->gameDone;
+    packet->numberOfBalls = gs->gameDone;
+    packet->player = gs->player;
+    packet->winner = gs->winner;
+
+    // copy over all arrays in the gamestate packet
+    for (int i = 0; i < 2; i++)
+    {
+        packet->LEDScores[i] = gs->LEDScores[i];
+        packet->overallScores[i] = gs->LEDScores[i];
+        packet->players[i] = gs->players[i];
+    }
+
+    for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
+    {
+        packet->balls[i] = gs->balls[i];
+    }
+}
+
+// This function copies over a packet into the global gamestate
+// using the fillPacket function to minimize program mem usage.
+void emptyPacket( GameState_t * gs, GameState_t * packet )
+{
+    fillPacket( packet, gs );
+}
 
 // initialize interrupts for input buttons B0, B1, B2, B3
 // on ports 4 and 5.
@@ -189,6 +224,7 @@ void InitBoardState()
     tempPlayer->color = PLAYER_BLUE;
     tempPlayer->currentCenter = MAX_SCREEN_X / 2;
     tempPlayer->position = TOP;
+    playerCount++;
 
     // initialize number of points for the players. Don't include this
     // in the initBoard function so that we can use that function to
@@ -261,8 +297,6 @@ void CreateGame()
     }
 
     // STATIC INLINE THIS ---------------------------------------------------------------------------------
-    uint8_t buff_ip[4];
-    uint8_t buff_displacement[2];
 
     // once the synchronization byte has been received,
     // the host is ready to receive the client's ip so it
@@ -276,11 +310,6 @@ void CreateGame()
     ReceiveData( (_u8*)&gamestate.player.ready          , 1);
     ReceiveData( (_u8*)&gamestate.player.joined         , 1);
     ReceiveData( (_u8*)&gamestate.player.acknowledge    , 1);
-
-    // finish organizing received bytes by assigning it to the gamestate
-    // player AFTER all data transfers are complete.
-    // gamestate.player.IP_address = buff_ip[0] << 24 | buff_ip[1] << 16 | buff_ip[2] << 8 | buff_ip[3] << 0;
-    // gamestate.player.displacement = buff_displacement[0] << 8 | buff_displacement[1] << 0;
 
     // 4. Acknowledge client to tell them they joined the game.
     handshake = 'H';
@@ -297,6 +326,7 @@ void CreateGame()
     GREEN_ON; // use LED to indicate WiFi connection as HOST
 
     // 5. Initialize the board (draw arena, players, scores)
+    G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
     InitBoardState();
 
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
@@ -314,14 +344,57 @@ void CreateGame()
 }
 
 /*
- * Thread that sends game state to client
+ * SUMMARY: Thread that sends game state to client
+ *
+ * DESCRIPTION:
+ * 1. Fill packet for client
+ * 2. Send packet
+ * 3. Check if game is done. Add EndOfGameHost thread if done.
  */
 void SendDataToClient()
 {
+#ifdef PACKETS
+    GameState_t packet;
+
     while(1)
     {
+        // 1. Fill packet for client
+        uint16_t packet_size =  sizeof(SpecificPlayerInfo_t) + MAX_NUM_OF_PLAYERS*sizeof(GeneralPlayerInfo_t)
+                              + sizeof(uint16_t) + sizeof(bool)*2 + sizeof(uint8_t)*2 + sizeof(uint8_t)*2;
 
+        fillPacket(&gamestate, &packet);
+
+        // 2. Send packet
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        SendData( (_u8*)&packet, packet.player.IP_address, packet_size );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        // 3. Check if the game is done. Add endofgamehost thread if done.
+        if ( gamestate.gameDone == true )
+            G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
+
+        sleep(5);
     }
+#endif
+#ifdef GAMESTATE
+    while(1)
+    {
+        // 1. Fill packet for client
+        uint16_t packet_size =  sizeof(SpecificPlayerInfo_t) + MAX_NUM_OF_PLAYERS*sizeof(GeneralPlayerInfo_t)
+                              + sizeof(uint16_t) + sizeof(bool)*2 + sizeof(uint8_t)*2 + sizeof(uint8_t)*2;
+
+        // 2. Send packet
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        SendData( (_u8*)&gamestate, gamestate.player.IP_address, packet_size );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        // 3. Check if the game is done. Add endofgamehost thread if done.
+        if ( gamestate.gameDone == true )
+            G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
+
+        sleep(5);
+    }
+#endif
 }
 
 /*
@@ -329,10 +402,58 @@ void SendDataToClient()
  */
 void ReceiveDataFromClient()
 {
+#ifdef PACKETS
+    // initialize packet to avoid crash
+    GameState_t packet;
+    int32_t result = -1;
+
     while(1)
     {
+        // if the response is greater than 0, valid data was returned
+        // to the gamestate. If not, no valid data was returned and
+        // thread is put to sleep to avoid deadlock.
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        result = ReceiveData( (_u8*)&packet.player, sizeof(packet.player) );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
+        sleep(1);
+
+        // If data was actually sent, empty the packet into the gamestate
+        if ( result > 0 )
+        {
+            emptyPacket(&gamestate, &packet);
+
+            // update the player's center
+            gamestate.players[1].currentCenter = gamestate.player.displacement;
+        }
+
+        sleep(2);
     }
+#endif
+#ifdef GAMESTATE
+    int32_t result = -1;
+
+    while(1)
+    {
+        // if the response is greater than 0, valid data was returned
+        // to the gamestate. If not, no valid data was returned and
+        // thread is put to sleep to avoid deadlock.
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        result = ReceiveData( (_u8*)&gamestate.player, sizeof(gamestate.player) );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        sleep(1);
+
+        // If data was actually sent, empty the packet into the gamestate
+        if ( result > 0 )
+        {
+            // update the player's center
+            gamestate.players[1].currentCenter = gamestate.player.displacement;
+        }
+
+        sleep(2);
+    }
+#endif
 }
 
 /*
@@ -403,6 +524,7 @@ void ReadJoystickHost()
             gamestate.players[0].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
 
+        sleep(10);
     }
 }
 
@@ -526,7 +648,7 @@ void EndOfGameHost()
 {
     while(1)
     {
-
+        sleep(50);
     }
 }
 
@@ -555,7 +677,6 @@ void JoinGame()
     player.joined = false;
     player.playerNumber = playerCount;
     player.ready = false;
-    playerCount++;
 
     // hardware initialization
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
@@ -588,7 +709,7 @@ void JoinGame()
     //      ReadJoystickClient, SendDataToHost, ReceiveDataFromHost, DrawObjects,
     //      MoveLEDs, Idle
     InitBoardState();
-    G8RTOS_InitSemaphore(&CLIENT_PLAYERDATA_SEMAPHORE, 1);
+    G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
 
     G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
@@ -606,31 +727,150 @@ void JoinGame()
  */
 void ReceiveDataFromHost()
 {
+#ifdef PACKETS
+    GameState_t packet;
+    int32_t result = -1;
+
     while(1)
     {
+        // 1. Fill packet from client
+        uint16_t packet_size =  sizeof(SpecificPlayerInfo_t) + MAX_NUM_OF_PLAYERS*sizeof(GeneralPlayerInfo_t)
+                              + sizeof(uint16_t) + sizeof(bool)*2 + sizeof(uint8_t)*2 + sizeof(uint8_t)*2;
 
+        // 2. Receive packet from the host
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        result = ReceiveData( (_u8*)&packet, packet_size);
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        // if valid data was received, empty the packet.
+        if ( result > 0 )
+        {
+            emptyPacket(&gamestate, &packet);
+
+            // 3. Check if the game is done. Add EndOfGameHost thread if done.
+            if ( gamestate.gameDone == true )
+                G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
+        }
+
+        sleep(5);
     }
+#endif
+#ifdef GAMESTATE
+    int32_t result = -1;
+
+    while(1)
+    {
+        // 1. Fill packet from client
+        uint16_t packet_size =  sizeof(SpecificPlayerInfo_t) + MAX_NUM_OF_PLAYERS*sizeof(GeneralPlayerInfo_t)
+                              + sizeof(uint16_t) + sizeof(bool)*2 + sizeof(uint8_t)*2 + sizeof(uint8_t)*2;
+
+        // 2. Receive packet from the host
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        result = ReceiveData( (_u8*)&gamestate, packet_size);
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        // if valid data was received, empty the packet.
+        if ( result > 0 )
+        {
+            // 3. Check if the game is done. Add EndOfGameHost thread if done.
+            if ( gamestate.gameDone == true )
+                G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
+        }
+
+        sleep(5);
+    }
+#endif
 }
 
 /*
- * Thread that sends UDP packets to host
+ * SUMMARY: Thread that sends UDP packets to host
+ *
+ * DESCRIPTION:
+ * 1. Send player information
+ * 2. Sleep for 2ms
  */
 void SendDataToHost()
 {
+#ifdef PACKETS
+    GameState_t packet;
+
     while(1)
     {
+        fillPacket(&gamestate, &packet);
 
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        SendData( (_u8*)&packet.player, HOST_IP_ADDR, sizeof(packet.player) );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        sleep(2);
     }
+#endif
+#ifdef GAMESTATE
+
+    while(1)
+    {
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        SendData( (_u8*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+
+        sleep(2);
+    }
+#endif
 }
 
 /*
- * Thread to read client's joystick
+ * SUMMARY: Thread to read client's joystick
+ *
+ * DESCRIPTION:
+ * 1. Read information from Joystick on client side and
+ *      package up to send back to host.
+ * 2. Differs from ReadJoystickHost because this requires
+ *      semaphores to keep data from corrupting.
  */
 void ReadJoystickClient()
 {
+    int16_t avg = 0;
+    int16_t joystick_x = 0;
+    int16_t joystick_y = 0;
+    int16_t displacement = 0;
+
     while(1)
     {
+        // moving average of the joystick inputs
+        GetJoystickCoordinates(&joystick_x, &joystick_y);
+        avg = (avg + joystick_x + JOYSTICK_BIAS) >> 1;
 
+        // use the joystick controls to increase and decrease
+        // the player velocity
+        switch(avg) {
+        case -10000 ... -6000   : displacement = 10;   break;
+        case -5999 ... -4000    : displacement = 5;    break;
+        case -3999 ... -2000    : displacement = 3;    break;
+        case -1999 ... -750     : displacement = 1;    break;
+        case -749  ... 750      : displacement = 0;     break;
+        case 751   ... 2000     : displacement = -1;     break;
+        case 2001  ... 4000     : displacement = -3;     break;
+        case 4001  ... 6000     : displacement = -5;     break;
+        case 6001  ... 10000    : displacement = -10;    break;
+        default                 : displacement = 0;     break;
+        }
+
+        // move the player's center
+        gamestate.player.displacement += displacement;
+
+        // player center is too far to the left - limit it.
+        if ( gamestate.player.displacement - PADDLE_LEN_D2 <= ARENA_MIN_X )
+        {
+            gamestate.player.displacement = ARENA_MIN_X + PADDLE_LEN_D2 + 1;
+        }
+
+        // player center is too far to the right - limit it.
+        else if ( gamestate.player.displacement + PADDLE_LEN_D2 > ARENA_MAX_X )
+        {
+            gamestate.player.displacement = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
+        }
+
+        sleep(10);
     }
 }
 
@@ -641,7 +881,7 @@ void EndOfGameClient()
 {
     while(1)
     {
-
+        sleep(50);
     }
 }
 
@@ -725,7 +965,7 @@ void MoveLEDs()
 {
     while(1)
     {
-
+        sleep(5);
     }
 }
 
