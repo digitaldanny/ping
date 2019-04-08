@@ -47,6 +47,10 @@ void main(void)
     buttons_init();
     LCD_Init(TP_DISABLE);
 
+    // Initialize semaphores
+    G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
+    G8RTOS_InitSemaphore(&GAMESTATE_SEMAPHORE, 1);
+
     // write the menu text
     writeMainMenu(MENU_TEXT_COLOR);
 

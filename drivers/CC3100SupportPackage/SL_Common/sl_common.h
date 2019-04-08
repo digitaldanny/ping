@@ -1,4 +1,4 @@
-#define DANNY_HOTSPOT
+#define JAKE_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
@@ -87,9 +87,17 @@ extern "C" {
  */
 #ifdef DANNY_HOTSPOT
 #define SSID_NAME       "Daniel"  /* Access point name to connect to. */
-#define SEC_TYPE        SL_SCAN_SEC_TYPE_WPA        /* Security type of the Access piont */
+#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
 // #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
 #define PASSKEY         "eel4930pass"               /* Password in case of secure AP */
+#define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
+#endif
+
+#ifdef JAKE_HOTSPOT
+#define SSID_NAME       "iPhone"  /* Access point name to connect to. */
+#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
+// #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
+#define PASSKEY         "snake16000"               /* Password in case of secure AP */
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
 #endif
 
