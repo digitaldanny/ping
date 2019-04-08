@@ -16,6 +16,7 @@
 
 /* Semaphores here */ 
 extern semaphore_t CC3100_SEMAPHORE;
+extern semaphore_t GAMESTATE_SEMAPHORE;
 
 /*********************************************** Externs ********************************************************************/
 
