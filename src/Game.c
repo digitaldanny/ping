@@ -15,22 +15,15 @@
  * Game.c
  *
  *  Created     : 4/2/2019
- *  Last Edit   : 4/7/2019
+ *  Last Edit   : 4/9/2019
  *
  *  UPDATES     :
  *  4/2/2019    : Initialized threads and game functions.
  *  4/6/2019    : Boards can send/receive UDP packets
  *  4/7/2019    : Boards send/receive packets more efficiently
+ *  4/8/2019    : Collisions, animations, main menu, and kill ball
  *
  *  TODO        :
- *  ~ Update player displacement/ready on initialization in JoinGame.
- *  ~ Does the player.acknowledge need to be updated in JoinGame?
- *  ~ Port number may be incorrect in the header configurations
- *  ~ Does it matter what the CreateGame sends back to client when acknowledging?
- *  ~ Initialize board in CreateGame and JoinGame
- *  ~ What is the difference between gamestate.gameDone and gamestate.winner?
- *  ~ Finish moveball collision logic
- *  ~ Possibly need a semaphore for the player center data.
  *
  */
 
