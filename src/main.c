@@ -34,6 +34,8 @@
 playerType  myPlayerType = None;    // undefined to avoid launching threads
 uint8_t     GameInitMode = 1;       // determines if the buttons are used as game controls or menu navigation
 
+
+
 #ifdef MAIN
 
 // ================================== MAIN PROGRAM ===============================
@@ -47,12 +49,13 @@ void main(void)
     buttons_init();
     LCD_Init(TP_DISABLE);
 
-    // Initialize semaphores
-    G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
-    G8RTOS_InitSemaphore(&GAMESTATE_SEMAPHORE, 1);
-
     // write the menu text
     writeMainMenu(MENU_TEXT_COLOR);
+
+    // initialize semaphores
+    G8RTOS_InitSemaphore(&LCDREADY, 1);
+    G8RTOS_InitSemaphore(&LEDREADY, 1);
+
 
     // Do not initialize any of the threads until the user decides
     // whether to host the game or to be on the client side.
@@ -61,7 +64,7 @@ void main(void)
         if (myPlayerType == Host)
         {
             // connect to the WiFi
-            initCC3100(Host);
+            //initCC3100(Host);
 
             // Initialize HOST-side threads
             G8RTOS_AddThread( &CreateGame, 0, 0xFFFFFFFF, "CREATE_GAME_____" ); // lowest priority
@@ -107,14 +110,30 @@ void PORT4_IRQHandler( void )
     if ( (P4->IFG & BIT4) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
         myPlayerType = Host;
         GameInitMode = 0;
     }
     else if ( (P4->IFG & BIT5) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
         myPlayerType = Client;
         GameInitMode = 0;
+    }
+
+    // determine the next game mode
+    else if ( (P4->IFG & BIT4))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = NextGame;
+    }
+    else if ( (P4->IFG & BIT5))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = EndGame;
     }
 #endif
 
@@ -126,10 +145,11 @@ void PORT4_IRQHandler( void )
 void PORT5_IRQHandler( void )
 {
 
-    // MENU NAVIGATION MODE --------------------------------------
+    // MAIN MENU NAVIGATION MODE --------------------------------------
     if ( (P5->IFG & BIT4 || P5->IFG & BIT5) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT5_IRQn);
+        NVIC_DisableIRQ(PORT4_IRQn);
         myPlayerType = Client;
         GameInitMode = 0;
     }
