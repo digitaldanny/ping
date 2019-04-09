@@ -1,4 +1,4 @@
-#define JAKE_HOTSPOT
+#define DANNY_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
@@ -47,15 +47,15 @@ typedef enum
  * Should be in long format, E.g: 0xc0a8010a == 192.168.1.10
  */
 // #define HOST_IP_ADDR           0xC0A80102               // IP address of server to connect to
-#ifdef DANNY_HOTSPOT
-#define HOST_IP_ADDR           0xAC140A06               // IP address of server to connect to
+#define HOST_IP_ADDR           0xAC140A05               // IP address of server to connect to
 #define PORT_NUM               5001                     // Port number to be used
 #define NO_OF_PACKETS          1                        // Number of packets to send out
 
 /*
  * Static IP address for host
  */
-#define CONFIG_IP       SL_IPV4_VAL(172,20,10,6)       /* Static IP to be configured */
+#ifdef DANNY_HOTSPOT
+#define CONFIG_IP       SL_IPV4_VAL(172,20,10,5)       /* Static IP to be configured */
 #define AP_MASK         SL_IPV4_VAL(255,255,255,240)      /* Subnet Mask for the station */
 #define AP_GATEWAY      SL_IPV4_VAL(172,20,10,1)        /* Default Gateway address */
 #define AP_DNS          SL_IPV4_VAL(172,20,10,1)            /* DNS Server Address */
@@ -63,14 +63,10 @@ typedef enum
 #endif
 
 #ifdef JAKE_HOTSPOT
-#define HOST_IP_ADDR           0xAC140A06               // IP address of server to connect to
-#define PORT_NUM               5001                     // Port number to be used
-#define NO_OF_PACKETS          1                        // Number of packets to send out
-
-#define CONFIG_IP       SL_IPV4_VAL(172,20,10,6)       /* Static IP to be configured */
+#define CONFIG_IP       SL_IPV4_VAL(172,20,10,2)       /* Static IP to be configured */
 #define AP_MASK         SL_IPV4_VAL(255,255,255,240)      /* Subnet Mask for the station */
 #define AP_GATEWAY      SL_IPV4_VAL(172,20,10,1)        /* Default Gateway address */
-#define AP_DNS          SL_IPV4_VAL(172,20,10,1)            /* DNS Server Address */
+#define AP_DNS          SL_IPV4_VAL(0,0,0,0)            /* DNS Server Address */
 #define SL_STOP_TIMEOUT        0xFF
 #endif
 

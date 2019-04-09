@@ -383,6 +383,20 @@ sched_err_code_t G8RTOS_KillThread( threadId_t id )
     return err;
 }
 
+void G8RTOS_KillAllOthers()
+{
+    uint32_t primask = StartCriticalSection();
+    tcb_t currentThread = *CurrentlyRunningThread;
+    for (int i = 0; i < MAX_THREADS; i++)
+    {
+        if ( currentThread.id != threadControlBlocks[i].id && threadControlBlocks[i].name[0] != 'I'){
+            sched_err_code_t err = G8RTOS_KillThread(threadControlBlocks[i].id);
+        }
+    }
+
+    EndCriticalSection(primask);
+}
+
 // a thread calls the KillSelf function to send its own ID to the KillThread
 // function
 sched_err_code_t G8RTOS_KillSelf()
@@ -668,6 +682,7 @@ void sleep(uint32_t durationMS)
     CurrentlyRunningThread->sleep_count = SystemTime + durationMS;
     CurrentlyRunningThread->asleep = 0x1;
     StartContextSwitch();
+    while(CurrentlyRunningThread->asleep);
 }
 
 /*********************************************** UPDATES *********************************************************************/

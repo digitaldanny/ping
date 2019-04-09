@@ -76,6 +76,7 @@ void G8RTOS_Scheduler_Priority(void);
 
 
 threadId_t G8RTOS_GetThreadId();
+void G8RTOS_KillAllOthers();
 sched_err_code_t G8RTOS_KillThread( threadId_t id );
 sched_err_code_t G8RTOS_KillSelf();
 
