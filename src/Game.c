@@ -334,6 +334,7 @@ void CreateGame()
     {
         ReceiveData((uint8_t*)&gamestate.player, sizeof(gamestate.player));
     } while ( gamestate.player.acknowledge == false );
+
 #endif
 #endif
 

@@ -40,6 +40,7 @@ uint8_t     GameInitMode = 1;       // determines if the buttons are used as gam
 void main(void)
 {
 
+
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
 
     // Initialize and launch RTOS
