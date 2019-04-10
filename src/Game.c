@@ -100,7 +100,7 @@ void buttons_init(void)
 void writeMainMenu( uint16_t Color )
 {
     LCD_Text(0, 0, "B0 -> HOST", Color);
-    LCD_Text(0, 16, "B1 -> CLIENT", Color);
+    LCD_Text(0, 16, "B2 -> CLIENT", Color);
     srand(time(0));  // generated for later use
 }
 
@@ -201,9 +201,9 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
         LCD_DrawRectangle(starting_new_data_window, starting_new_data_window + center_diff,
                           yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, outPlayer->color);
       
-		// signal the LCD semaphore
-		G8RTOS_SignalSemaphore(&LCDREADY);    
-	}
+        // signal the LCD semaphore
+        G8RTOS_SignalSemaphore(&LCDREADY);
+    }
 }
 
 /*
@@ -412,13 +412,13 @@ void SendDataToClient()
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
         SendData( (uint8_t*)&gamestate, gamestate.player.IP_address, sizeof(gamestate) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-        G8RTOS_SendSemaphore(&LCDREADY);
+        G8RTOS_SignalSemaphore(&LCDREADY);
 
         // 3. Check if the game is done. Add endofgamehost thread if done.
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
 
-        sleep(3);
+        sleep(2);
     }
 #endif
 }
@@ -474,7 +474,7 @@ void ReceiveDataFromClient()
         // update the player's center
         gamestate.players[1].currentCenter = gamestate.player.displacement;
 
-        sleep(10);
+        sleep(5);
     }
 #endif
 }
@@ -547,7 +547,7 @@ void ReadJoystickHost()
             gamestate.players[0].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
 
-        sleep(10);
+        sleep(5);
     }
 }
 
@@ -976,7 +976,7 @@ void ReceiveDataFromHost()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
-        sleep(10);
+        sleep(3);
     }
 #endif
 }
@@ -1011,7 +1011,7 @@ void SendDataToHost()
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
         G8RTOS_SignalSemaphore(&LCDREADY);
 
-        sleep(20);
+        sleep(2);
     }
 #endif
 }
@@ -1047,10 +1047,6 @@ void ReadJoystickClient()
         default                 : displacement = 0;     break;
         }
 
-        // Semaphore doesn't allow player displacement to be sent
-        // before the max and min boundaries are set.
-        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
-
         // move the player's center
         gamestate.player.displacement += displacement;
 
@@ -1065,11 +1061,9 @@ void ReadJoystickClient()
         {
             gamestate.player.displacement = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
-
-        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-
-        sleep(10);
     }
+
+    sleep(5);
 }
 
 /*
@@ -1079,7 +1073,7 @@ void EndOfGameClient()
 {
     while(1)
     {
-
+        sleep(50);
     }
 }
 
@@ -1161,7 +1155,7 @@ void MoveLEDs()
 
         G8RTOS_SignalSemaphore(&LEDREADY);
 
-        sleep(30);
+        sleep(100);
     }
 }
 
