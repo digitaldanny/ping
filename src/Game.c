@@ -1,4 +1,4 @@
-#define SINGLE
+#define MULTI
 #define GAMESTATE
 #define HANDSHAKE2
 
@@ -18,7 +18,7 @@
  *  4/6/2019    : Boards can send/receive UDP packets
  *  4/7/2019    : Boards send/receive packets more efficiently
  *  4/8/2019    : Collisions, animations, main menu, and kill ball
- *  4/10/2019   : All branch merge bugs squashed
+ *  4/10/2019   : All branch merge bugs squashed, wifi connection stabilized
  *
  *  TODO        :
  *
@@ -366,13 +366,13 @@ void CreateGame()
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
     G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
-    G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
 
 #ifdef MULTI
-    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
     G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
 #endif
 
@@ -408,9 +408,11 @@ void SendDataToClient()
     while(1)
     {
         // 2. Send packet
+        G8RTOS_WaitSemaphore(&LCDREADY);
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
         SendData( (uint8_t*)&gamestate, gamestate.player.IP_address, sizeof(gamestate) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+        G8RTOS_SendSemaphore(&LCDREADY);
 
         // 3. Check if the game is done. Add endofgamehost thread if done.
         if ( gamestate.gameDone == true )
@@ -472,7 +474,7 @@ void ReceiveDataFromClient()
         // update the player's center
         gamestate.players[1].currentCenter = gamestate.player.displacement;
 
-        sleep(2);
+        sleep(10);
     }
 #endif
 }
@@ -490,7 +492,7 @@ void GenerateBall()
         // the max number of balls have not been generated.
         if ( ballCount < MAX_NUM_OF_BALLS )
         {
-            G8RTOS_AddThread(&MoveBall, 3, 0xFFFFFFFF, "MOVE_BALL_______");
+            G8RTOS_AddThread(&MoveBall, 10, 0xFFFFFFFF, "MOVE_BALL_______");
             ballCount++;
         }
         sleep(ballCount * BALL_GEN_SLEEP);
@@ -722,7 +724,8 @@ void MoveBall()
                 gamestate.LEDScores[0] += 1;
             }
             if(gamestate.LEDScores[0] == 8 || gamestate.LEDScores[1] == 8){
-                 G8RTOS_AddThread( &EndOfGameHost, 0, 0xFFFFFFFF,          "GENERATE_BALL___" );
+                 // G8RTOS_AddThread( &EndOfGameHost, 0, 0xFFFFFFFF,          "GENERATE_BALL___" );
+                gamestate.gameDone = true;
             }
 
             ball->kill = 1;
@@ -784,6 +787,7 @@ void EndOfGameHost()
 
     ballCount = 0;
     playerCount = 2;
+    gamestate.gameDone = false;
 
     // 1. Initialize players' general parameters
     // player 1 initializations...
@@ -828,7 +832,7 @@ void EndOfGameHost()
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
     G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &MoveLEDs, 10, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
     // 7. Kill self.
@@ -850,8 +854,11 @@ void EndOfGameHost()
  *      MoveLEDs, Idle
  * 6. Kill self.
  */
+#ifdef MULTI
 void JoinGame()
 {
+    initCC3100(Client); // connect to the network
+
     // 1. Set initial SpecificPlayerInfo_t strict attributes ( getLocalIP() ).
     gamestate.player.IP_address = getLocalIP();
     gamestate.player.acknowledge = false;
@@ -863,9 +870,6 @@ void JoinGame()
     // hardware initialization
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
-
-#ifdef MULTI
-    initCC3100(Client); // connect to the network
 
 #ifndef HANDSHAKE2
     // 2. Send player data into the host.
@@ -901,7 +905,6 @@ void JoinGame()
     SendData( (uint8_t*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
 
 #endif
-#endif
 
     // 4. If you've joined the game, acknowledge you've joined to the host
     //      and show connection through LED.
@@ -916,12 +919,13 @@ void JoinGame()
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
     G8RTOS_AddThread( &ReceiveDataFromHost, 10, 0xFFFFFFFF,                 "RECEIVE_DATA____" );
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
-    G8RTOS_AddThread( &MoveLEDs, 244, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &MoveLEDs, 10, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
     // 6. Kill self.
     G8RTOS_KillSelf();
 }
+#endif
 
 /*
  * Thread that receives game state packets from host
@@ -972,7 +976,7 @@ void ReceiveDataFromHost()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
-        sleep(3);
+        sleep(10);
     }
 #endif
 }
@@ -1001,9 +1005,11 @@ void SendDataToHost()
 
     while(1)
     {
+        G8RTOS_WaitSemaphore(&LCDREADY);
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
         SendData( (_u8*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+        G8RTOS_SignalSemaphore(&LCDREADY);
 
         sleep(20);
     }
