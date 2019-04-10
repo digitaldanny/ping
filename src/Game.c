@@ -1,4 +1,4 @@
-#define MULTI
+#define SINGLE
 #define GAMESTATE
 #define HANDSHAKE2
 
@@ -457,7 +457,7 @@ void ReceiveDataFromClient()
             G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
             result = ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
             G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-            G8RTOS_SignalsSemaphore(&LCDREADY);
+            G8RTOS_SignalSemaphore(&LCDREADY);
             sleep(1); // avoid deadlock
 
         } while ( result < 0 );
