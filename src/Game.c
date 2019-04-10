@@ -301,6 +301,8 @@ void CreateGame()
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
+    initCC3100(Host); // connect to the network
+
     // 3. Try to receive packet from the client until return SUCCESS
 #ifndef HANDSHAKE2
     uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
@@ -866,6 +868,8 @@ void JoinGame()
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
+    initCC3100(Client); // connect to the network
+
 #ifndef HANDSHAKE2
     // 2. Send player data into the host.
     // 3. Try to send player packet to host until host acknowledges
