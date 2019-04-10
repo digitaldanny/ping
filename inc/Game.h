@@ -18,6 +18,8 @@
 /* Semaphores here */ 
 extern semaphore_t CC3100_SEMAPHORE;
 extern semaphore_t GAMESTATE_SEMAPHORE;
+extern semaphore_t LCDREADY;
+extern semaphore_t LEDREADY;
 
 /*********************************************** Externs ********************************************************************/
 
@@ -35,7 +37,7 @@ extern semaphore_t GAMESTATE_SEMAPHORE;
 
 #define MAX_NUM_OF_PLAYERS  2
 #define MAX_NUM_OF_BALLS    8
-#define BALL_GEN_SLEEP      2500 // 2.5 second increments increasing linearly
+#define BALL_GEN_SLEEP      200 // 10 second increments increasing linearly
 
 #define DEFAULT_PRIORITY    15
 #define AGING_PRIORITY      10
@@ -91,8 +93,8 @@ extern semaphore_t GAMESTATE_SEMAPHORE;
 #define VERT_CENTER_MIN_BALL         (ARENA_MIN_Y + BALL_SIZE_D2)
 
 /* Maximum ball speed */
-#define MAX_BALL_SPEED               7
-#define MIN_BALL_SPEED               3
+#define MAX_BALL_SPEED               8
+#define MIN_BALL_SPEED               2
 
 /* Background color - Black */
 #define BACK_COLOR                   LCD_BLACK
@@ -121,6 +123,16 @@ typedef enum
     RIGHT = 2,
     LEFT = 3
 }playerPosition;
+
+/* Determines whether next game or end game */
+typedef enum
+{
+    NextGame = 0,
+    EndGame = 1,
+    NA = 2
+}gameNextState;
+
+extern gameNextState nextState;
 
 /*********************************************** Global Defines ********************************************************************/
 
@@ -160,6 +172,7 @@ typedef struct
     int16_t currentCenterY;
     uint16_t color;
     bool alive;
+	bool kill;
 } Ball_t;
 
 /*
