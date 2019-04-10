@@ -1,4 +1,4 @@
-#define JAKE_HOTSPOT
+#define DANNY_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
@@ -91,6 +91,12 @@ extern "C" {
 // #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
 #define PASSKEY         "eel4930pass"               /* Password in case of secure AP */
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
+
+/* Configuration of the device when it comes up in AP mode */
+#define SSID_AP_MODE       "Daniel"         /* SSID of the CC3100 in AP mode */
+#define PASSWORD_AP_MODE   "eel4930pass"                      /* Password of CC3100 AP */
+#define SEC_TYPE_AP_MODE   SL_SEC_TYPE_OPEN         /* Can take SL_SEC_TYPE_WEP or
+                                                     * SL_SEC_TYPE_WPA as well */
 #endif
 
 #ifdef JAKE_HOTSPOT
@@ -101,11 +107,19 @@ extern "C" {
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
 #endif
 
+#ifdef DANNY_ROUTER
+#define SSID_NAME       "Hamilton_5GHz"  /* Access point name to connect to. */
+#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
+// #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
+#define PASSKEY         "..."                       /* Password in case of secure AP */
+#define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
+
 /* Configuration of the device when it comes up in AP mode */
-#define SSID_AP_MODE       "Daniel"         /* SSID of the CC3100 in AP mode */
-#define PASSWORD_AP_MODE   "eel4930pass"                      /* Password of CC3100 AP */
+#define SSID_AP_MODE       "Hamilton_5GHz"         /* SSID of the CC3100 in AP mode */
+#define PASSWORD_AP_MODE   "..."                      /* Password of CC3100 AP */
 #define SEC_TYPE_AP_MODE   SL_SEC_TYPE_OPEN         /* Can take SL_SEC_TYPE_WEP or
                                                      * SL_SEC_TYPE_WPA as well */
+#endif
 
 /*
  * Values for below macros shall be modified based on current time
