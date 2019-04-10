@@ -21,7 +21,7 @@
  *  4/2/2019    : Initialized threads and game functions.
  *  4/6/2019    : Boards can send/receive UDP packets
  *  4/7/2019    : Boards send/receive packets more efficiently
- *  4/8/2019    : Collisions, animations, main menu, and kill ball
+ *  4/9/2019    : Collisions, animations, main menu, and kill ball
  *
  *  TODO        :
  *
@@ -34,10 +34,14 @@ GameState_t gamestate;
 GameState_t packet;
 uint8_t playerCount = 0;
 uint8_t ballCount = 0;
+PrevBall_t previousBalls[MAX_NUM_OF_BALLS];
+gameNextState nextState = NA;   // set next game state to NA
 
 // ======================      SEMAPHORES          ==========================
 semaphore_t CC3100_SEMAPHORE;
 semaphore_t GAMESTATE_SEMAPHORE;
+semaphore_t LCDREADY;
+semaphore_t LEDREADY;
 
 // ======================     GAME FUNCTIONS       ==========================
 
@@ -104,6 +108,21 @@ void writeMainMenu( uint16_t Color )
     srand(time(0));  // generated for later use
 }
 
+// Any animations or text used for the game menu is displayed with this function
+void writeGameMenu( uint16_t Color )
+{
+    LCD_Clear(LCD_BLACK);
+
+    // signal semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
+
+    LCD_Text(MAX_SCREEN_X/2, MAX_SCREEN_Y/2-8, "B0 -> Next Game", Color);
+    LCD_Text(MAX_SCREEN_X/2, MAX_SCREEN_Y/2+8, "B2 -> End Game", Color);
+
+    // wait semaphore
+    // signal semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
+}
 /*
  * Returns either Host or Client depending on button press
  */
@@ -123,9 +142,13 @@ void DrawPlayer(GeneralPlayerInfo_t * player)
     if (player->position == BOTTOM) yCenter = ARENA_MAX_Y - PADDLE_WID_D2 - PADDLE_OFFSET;
     if (player->position == TOP)    yCenter = ARENA_MIN_Y + PADDLE_WID_D2 + PADDLE_OFFSET;
 
+    // wait for LCD semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
     LCD_DrawRectangle(player->currentCenter - PADDLE_LEN_D2, player->currentCenter + PADDLE_LEN_D2,
                       yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, player->color);
 
+   // signal the LCD semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
 }
 
 /*
@@ -170,7 +193,9 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
             // Calculate the starting x position for the UNCOMMON NEW player's area on the LEFT side
             starting_new_data_window = outPlayer->currentCenter - PADDLE_LEN_D2;
         }
-
+		        
+		// wait for LCD semaphore
+        G8RTOS_WaitSemaphore(&LCDREADY);
         // erase the UNCOMMON old player position first
         LCD_DrawRectangle(starting_old_data_window, starting_old_data_window + center_diff,
                           yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, BACK_COLOR);
@@ -178,57 +203,39 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
         // draw the UNCOMMON updated player position
         LCD_DrawRectangle(starting_new_data_window, starting_new_data_window + center_diff,
                           yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, outPlayer->color);
-
-    }
+		
+		// signal the LCD semaphore
+		G8RTOS_SignalSemaphore(&LCDREADY);    
+	}
 }
 
 /*
- * Function updates ball position on screen if it is required
+ * Function updates ball position on screen
  */
 void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_t outColor)
 {
-    // only update the ball if it is in a different position
-    if (    (previousBall->CenterX != currentBall->currentCenterX) &&
-            (previousBall->CenterY != currentBall->currentCenterY)      )
-    {
-        // erase the old ball first
-        LCD_DrawRectangle(previousBall->CenterX, previousBall->CenterX + BALL_SIZE,
-                          previousBall->CenterY, previousBall->CenterY + BALL_SIZE, BACK_COLOR);
+    // wait for LCD semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
 
-        // draw the new ball next
-        LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
-                          currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
-    }
+    // erase the old ball first
+    LCD_DrawRectangle(previousBall->CenterX, previousBall->CenterX + BALL_SIZE,
+                      previousBall->CenterY, previousBall->CenterY + BALL_SIZE, BACK_COLOR);
+
+    // draw the new ball next
+    LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
+                      currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
+
+    // signal LCD semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
+
 }
+
 
 /*
  * Initializes and prints initial game state
  */
 void InitBoardState()
 {
-    // declare variables
-    GeneralPlayerInfo_t * tempPlayer;
-
-    // 1. Initialize players' general parameters
-    // player 1 initializations...
-    tempPlayer = &gamestate.players[0];
-    tempPlayer->color = PLAYER_RED;
-    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
-    tempPlayer->position = BOTTOM;
-    playerCount++;
-
-    // player 2 initializations...
-    tempPlayer = &gamestate.players[1];
-    tempPlayer->color = PLAYER_BLUE;
-    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
-    tempPlayer->position = TOP;
-    playerCount++;
-
-    // initialize number of points for the players. Don't include this
-    // in the initBoard function so that we can use that function to
-    // restart the game without clearing the scores.
-    gamestate.overallScores[0] = 0;
-    gamestate.overallScores[1] = 0;
 
     // initialize balls
     Ball_t * tempBall;
@@ -245,20 +252,27 @@ void InitBoardState()
     gamestate.gameDone = 0;
     gamestate.numberOfBalls = 0;
     gamestate.winner = 0;
-
+    // wait for LCD semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
     // draw the map boundaries
     LCD_Clear(BACK_COLOR);
     LCD_DrawRectangle(ARENA_MIN_X-1, ARENA_MIN_X, ARENA_MIN_Y, ARENA_MAX_Y, LCD_WHITE);
     LCD_DrawRectangle(ARENA_MAX_X, ARENA_MAX_X+1, ARENA_MIN_Y, ARENA_MAX_Y, LCD_WHITE);
 
+    // signal the LCD semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
     char score_str[3] = {0, 0, 0};
 
+    // wait for LCD semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
     // draw the current score of the players
     snprintf( score_str, 2, "%d", gamestate.overallScores[0] );
     LCD_Text(0, MAX_SCREEN_Y - 16 - 1, (uint8_t*)score_str, PLAYER_RED);
 
     snprintf( score_str, 2, "%d", gamestate.overallScores[1] );
     LCD_Text(0, 0, (uint8_t*)score_str, PLAYER_BLUE);
+    // signal the LCD semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
 }
 
 // ====================== HOST HOST HOST HOST HOST ==========================
@@ -280,15 +294,40 @@ void InitBoardState()
  */
 void CreateGame()
 {
-    // 1. Initialize players complete in InitBoard
+        // declare variables
+    GeneralPlayerInfo_t * tempPlayer;
+
+    // 1. Initialize players' general parameters
+    // player 1 initializations...
+    tempPlayer = &gamestate.players[0];
+    tempPlayer->color = PLAYER_RED;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = BOTTOM;
+    playerCount++;
+
+    // player 2 initializations...
+    tempPlayer = &gamestate.players[1];
+    tempPlayer->color = PLAYER_BLUE;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = TOP;
+
+    // initialize number of points for the players. Don't include this
+    // in the initBoard function so that we can use that function to
+    // restart the game without clearing the scores.
+    gamestate.overallScores[0] = 0;
+    gamestate.overallScores[1] = 0;
 
     // 2. Establish connection with client
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
+
+    initCC3100(Host); // connect to the network
+
     // 3. Try to receive packet from the client until return SUCCESS
 #ifndef HANDSHAKE2
+
     uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
     while( handshake != 'C' )
     {
@@ -349,8 +388,8 @@ void CreateGame()
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
     // 7. Kill self.
@@ -442,9 +481,11 @@ void ReceiveDataFromClient()
         // thread is put to sleep to avoid deadlock.
         do
         {
+            G8RTOS_WaitSemaphore(&LCDREADY);
             G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
             result = ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
             G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalSemaphore(&LCDREADY);
             sleep(1); // avoid deadlock
 
         } while ( result < 0 );
@@ -470,7 +511,7 @@ void GenerateBall()
         // the max number of balls have not been generated.
         if ( ballCount < MAX_NUM_OF_BALLS )
         {
-            G8RTOS_AddThread(&MoveBall, DEFAULT_PRIORITY, 0xFFFFFFFF, "MOVE_BALL_______");
+            G8RTOS_AddThread(&MoveBall, 3, 0xFFFFFFFF, "MOVE_BALL_______");
             ballCount++;
         }
         sleep(ballCount * BALL_GEN_SLEEP);
@@ -525,7 +566,7 @@ void ReadJoystickHost()
             gamestate.players[0].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
 
-        sleep(10);
+        sleep(15);
     }
 }
 
@@ -538,8 +579,11 @@ void ReadJoystickHost()
  */
 void MoveBall()
 {
+#define JAKES_VERSION
     // initialize the ball properties for the ball
     // that will be used in this thread.
+
+#ifdef DANS_VERSION
     Ball_t * ball;
     Ball_t new_ball; // used in while loop..
     for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
@@ -549,14 +593,13 @@ void MoveBall()
         {
             ball->alive = 1;
             ball->color = LCD_WHITE;
-            ball->currentCenterX = BALL_SIZE * (rand() % ((ARENA_MAX_X - ARENA_MIN_X + 1)/BALL_SIZE) ) + ARENA_MIN_X;
+            ball->currentCenterX = BALL_SIZE * (rand() % (ARENA_MAX_X/BALL_SIZE)) + ARENA_MIN_X;
             ball->currentCenterY = BALL_SIZE * (rand() % (ARENA_MAX_Y/BALL_SIZE));
             ballCount++;
             break;
         }
     }
 
-    new_ball = *ball; // initialize the new color, etc
     int16_t xvel = rand() % MAX_BALL_SPEED + 1;
     int16_t yvel = rand() % MAX_BALL_SPEED + 1;
 
@@ -566,91 +609,269 @@ void MoveBall()
 
         // collision detection if reaching the left or right side borders
         // UPDATE TO USE MINKOWSKI ALGORITHM.
-        if ( ball->currentCenterX + BALL_SIZE >= ARENA_MAX_X - WIGGLE_ROOM
-                || ball->currentCenterX <= ARENA_MIN_X + WIGGLE_ROOM + 1    )
+        if ( ball->currentCenterX + BALL_SIZE >= ARENA_MAX_X
+                || ball->currentCenterX <= ARENA_MIN_X      )
         {
             xvel *= -1; // go the opposite direction
         }
 
         // collision detection and color change if the ball hits a player
-        int32_t w;
-        int32_t h;
-        int32_t dx;
-        int32_t dy;
-        int32_t BcenterY;
-        for (int i = 0; i < playerCount; i++)
-        {
 
-            if ( gamestate.players[i].position == BOTTOM )  BcenterY = ARENA_MAX_Y - PADDLE_WID_D2;
-            if ( gamestate.players[i].position == TOP )     BcenterY = ARENA_MIN_Y + PADDLE_WID_D2;
-
-            // Minkowski algorithm for collision
-            w = (BALL_SIZE + PADDLE_LEN) >> 1;      // w = .5 * (A.width() + B.width())
-            h = (BALL_SIZE + PADDLE_WID) >> 1;      // h = .5 * (A.height() + B.height())
-            dx = ball->currentCenterX - gamestate.players[i].currentCenter; // A.centerX() - B.centerX()
-            dy = ball->currentCenterY - BcenterY;   // A.centerY() - B.centerY()
-
-            int32_t wy = w*dy;
-            int32_t hx = h*dx;
-
-            // CHECK IF THERE IS A COLLISION ------------------------
-            if ( abs(dx) <= w + WIGGLE_ROOM && abs(dy) <= h + WIGGLE_ROOM )
-            {
-                // check where the collision is happening at
-                if ( wy > hx - WIGGLE_ROOM )
-                {
-                    // collision at the TOP
-                    if ( wy > -hx - WIGGLE_ROOM && gamestate.players[i].position == BOTTOM )
-                    {
-                        yvel *= -1;
-                    }
-
-                    // collision on the LEFT
-                    else
-                    {
-                        xvel *= -1;
-                        yvel *= -1;
-                    }
-                }
-
-                else
-                {
-                    // collision on the RIGHT
-                    if ( wy > -hx + WIGGLE_ROOM)
-                    {
-                        yvel *= -1;
-                        xvel *= -1;
-                    }
-
-                    // collision on the BOTTOM (CHECKING TO MAKE SURE THIS IS THE TOP PADDLE)
-                    else if ( gamestate.players[i].position == TOP )
-                    {
-                        yvel *= -1;
-                    }
-                }
-            }
-
-            // PLAYER SCORES ---------------------------
-        }
+        // player scores
 
         // attempt to move ball in current direction
         new_ball.currentCenterX += xvel;
         new_ball.currentCenterY += yvel;
 
+        // update ball on screen
+        UpdateBallOnScreen(ball, &new_ball, new_ball.color);
         *ball = new_ball;
         sleep(35);
     }
+#endif
+
+#ifdef JAKES_VERSION
+    Ball_t * ball;
+    PrevBall_t * previousBall;
+    for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
+    {
+        ball = &gamestate.balls[i];
+        previousBall = &previousBalls[i];
+        if ( ball->alive == 0 )
+        {
+            previousBall->CenterX = 0;
+            previousBall->CenterY = 0;
+            ball->alive = 1;
+            ball->kill = 0;
+            ball->color = LCD_WHITE;
+            ball->currentCenterX = BALL_SIZE * (rand() % ((ARENA_MAX_X - ARENA_MIN_X - BALL_SIZE)/BALL_SIZE)) + ARENA_MIN_X + 1;
+            ball->currentCenterY = BALL_SIZE * (rand() % (((ARENA_MAX_Y - 80 - ARENA_MIN_Y)/BALL_SIZE)+ 10));
+            break;
+        }
+    }
+
+    int16_t xvel = rand() % MAX_BALL_SPEED + 1;
+    int16_t yvel = rand() % MAX_BALL_SPEED + 1;
+
+    if(ball->currentCenterY > 120){
+        yvel = -yvel;
+    }
+
+    while(1){
+
+        // test if hitting the right or left side wall
+        if((xvel > 0 && ball->currentCenterX + xvel + BALL_SIZE + 1 >= ARENA_MAX_X) ||
+           (xvel < 0 && ball->currentCenterX + xvel - 1 <= ARENA_MIN_X)){
+            xvel = -xvel;
+        }
+
+        // test if hitting the top or bottom paddle
+        if(((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2)  &&
+            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE)) ||
+           ((yvel < 0 && ball->currentCenterY + yvel <= ARENA_MIN_Y + PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2)  &&
+            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE))){
+
+            // reverse the y direction
+            yvel = -yvel;
+
+            // change color and ball directions
+            if(yvel > 0){
+                ball->color = LCD_BLUE;
+                if(ball->currentCenterX < gamestate.players[1].currentCenter - PADDLE_LEN_D2>>1){
+                    // left 1/4 of client side
+                    xvel -= 1;
+                    if(xvel > 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                else if(ball->currentCenterX > gamestate.players[1].currentCenter + PADDLE_LEN_D2>>1){
+                    // right 1/4 of client side
+                    xvel += 1;
+                    if(xvel < 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                if(yvel == 0){  yvel = 1;}
+            }
+            else{
+                ball->color = LCD_RED;
+                if(ball->currentCenterX < gamestate.players[0].currentCenter - PADDLE_LEN_D2>>1){
+                    // left 1/4 of host side
+                    xvel += 1;
+                    if(xvel > 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                else if(ball->currentCenterX > gamestate.players[0].currentCenter + PADDLE_LEN_D2>>1){
+                    // right 1/4 of host side
+                    xvel -= 1;
+                    if(xvel < 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                if(yvel == 0){  yvel = -1;}
+            }
+
+            // determine the x and y directions
+
+        }
+        else if((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) ||
+                (yvel < 0 && ball->currentCenterY + yvel <= ARENA_MIN_Y + PADDLE_WID)){
+
+            // kill this ball, and score the point
+            // set ball to dead
+            ball->alive = 1;
+
+            // score points
+            if(yvel > 0 && (ball->color == LCD_BLUE || ball->color == LCD_RED)){
+                gamestate.LEDScores[1] += 1;
+            }
+            else if(ball->color == LCD_BLUE || ball->color == LCD_RED){
+                gamestate.LEDScores[0] += 1;
+            }
+            if(gamestate.LEDScores[0] == 8 || gamestate.LEDScores[1] == 8){
+                 G8RTOS_AddThread( &EndOfGameHost, 0, 0xFFFFFFFF,          "GENERATE_BALL___" );
+            }
+
+            ball->kill = 1;
+
+            G8RTOS_KillSelf();
+
+        }
+
+        // see if the ball passed the
+
+
+        previousBall->CenterX       = ball->currentCenterX;
+        previousBall->CenterY       = ball->currentCenterY;
+
+        ball->currentCenterX       += xvel;
+        ball->currentCenterY       += yvel;
+
+
+        //UpdateBallOnScreen(previousBall, ball, ball->color);
+
+        sleep(35);
+    }
+
+
+#endif
+
 }
+
+
 
 /*
  * End of game for the host
  */
 void EndOfGameHost()
 {
-    while(1)
-    {
-        sleep(50);
+    // wait for semaphores
+    G8RTOS_WaitSemaphore(&LCDREADY);
+    G8RTOS_WaitSemaphore(&LEDREADY);
+
+    G8RTOS_KillAllOthers();
+
+    // signal semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
+    G8RTOS_SignalSemaphore(&LEDREADY);
+
+
+
+    // wait for semaphores
+    G8RTOS_WaitSemaphore(&LCDREADY);
+    G8RTOS_WaitSemaphore(&LEDREADY);
+
+    // determine winner
+    if(gamestate.LEDScores[0] == 8){
+        //host wins, increment score and color screen
+        gamestate.overallScores[0] += 1;
+        LCD_Clear(LCD_RED);
     }
+    else if(gamestate.LEDScores[1] == 8){
+        //client wins, increment score and color screen
+        gamestate.overallScores[1] += 1;
+        LCD_Clear(LCD_BLUE);
+    }
+    gamestate.LEDScores[0] = 0;
+    gamestate.LEDScores[1] = 0;
+    for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
+        gamestate.balls[i].alive = 0;
+    }
+    // signal semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
+    G8RTOS_SignalSemaphore(&LEDREADY);
+    ballCount = 0;
+
+
+    // declare variables
+    GeneralPlayerInfo_t * tempPlayer;
+
+    // 1. Initialize players' general parameters
+    // player 1 initializations...
+    tempPlayer = &gamestate.players[0];
+    tempPlayer->color = PLAYER_RED;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = BOTTOM;
+
+    // player 2 initializations...
+    tempPlayer = &gamestate.players[1];
+    tempPlayer->color = PLAYER_BLUE;
+    tempPlayer->currentCenter = MAX_SCREEN_X / 2;
+    tempPlayer->position = TOP;
+
+    G8RTOS_WaitSemaphore(&LEDREADY);
+
+    setLedMode_lp3943( RED, 0x0000);
+    setLedMode_lp3943( BLUE, 0x0000);
+
+    G8RTOS_SignalSemaphore(&LEDREADY);
+
+    sleep(1000);
+
+    writeGameMenu(LCD_WHITE);
+    nextState = NA;   // set next game state to NA
+    buttons_init();
+    while(nextState == NA);
+    if(nextState == EndGame){
+
+        // thanks for playing
+        // reset leds on board
+        G8RTOS_KillSelf();
+    }
+
+
+    GREEN_ON; // use LED to indicate WiFi connection as HOST
+
+    // 5. Initialize the board (draw arena, players, scores)
+    InitBoardState();
+
+    // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
+    //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
+    //G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
+    G8RTOS_AddThread( &DrawObjects, DEFAULT_PRIORITY, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
+
+    // 7. Kill self.
+    G8RTOS_KillSelf();
 }
 
 // ==================== CLIENT CLIENT CLIENT CLIENT ==========================
@@ -683,10 +904,14 @@ void JoinGame()
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
+
+    initCC3100(Client); // connect to the network
+
 #ifndef HANDSHAKE2
     // 2. Send player data into the host.
     // 3. Try to send player packet to host until host acknowledges
     //    that it received the player information.
+
     uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
     while( handshake != 'H' )
     {
@@ -730,8 +955,8 @@ void JoinGame()
 
     G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &ReceiveDataFromHost, 10, 0xFFFFFFFF,                 "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &DrawObjects, DEFAULT_PRIORITY, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &MoveLEDs, 244, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
@@ -777,9 +1002,11 @@ void ReceiveDataFromHost()
         do
         {
             // 1. Receive packet from the host
+            G8RTOS_WaitSemaphore(&LCDREADY);
             G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
             result = ReceiveData( (_u8*)&gamestate, sizeof(gamestate));
             G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalSemaphore(&LCDREADY);
         } while ( result < 0 );
 
         // 3. Check if the game is done. Add EndOfGameHost thread if done.
@@ -911,8 +1138,6 @@ void EndOfGameClient()
  */
 void DrawObjects()
 {
-    Ball_t * ball;
-
     // store all previous locations of the players to see if
     // it needs to be updated.
     PrevPlayer_t prevPlayers[MAX_NUM_OF_PLAYERS];
@@ -921,51 +1146,31 @@ void DrawObjects()
         prevPlayers[i].Center = -1; // load fake values to determine first run
     }
 
-    // store all previous locations of the balls to see if
-    // they need to be updated.
-    PrevBall_t prevBalls[MAX_NUM_OF_BALLS];
-    for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
-    {
-        prevBalls[i].CenterX = -1; // load fake values to determine first run
-        prevBalls[i].CenterY = -1; // load fake values to determine first run
-    }
-
     while(1)
     {
-        // Draw players ---------------------------------------
+        // Draw players --------------------
         for (int i = 0; i < playerCount; i++)
         {
             // This player is on its first run. Draw
             // the entire paddle.
-            if ( prevPlayers[i].Center == -1 ) DrawPlayer( &gamestate.players[i] );
-
+            if ( prevPlayers[i].Center == -1 ) {
+                DrawPlayer( &gamestate.players[i] );
+            }
             // if this player has already been drawn, only
             // update the parts that need to be redrawn.
             else UpdatePlayerOnScreen( &prevPlayers[i], &gamestate.players[i]);
 
             prevPlayers[i].Center = gamestate.players[i].currentCenter;
         }
-
-        // Redraw all balls that are alive --------------------
-        for (int i = 0; i < MAX_NUM_OF_BALLS; i++)
-        {
-            if (gamestate.balls[i].alive)
-            {
-                ball = &gamestate.balls[i];
-
-                // this is the ball's first run + it's alive
-                if ( prevBalls[i].CenterX == -1 && prevBalls[i].CenterY == -1 )
-                {
-                    LCD_DrawRectangle(ball->currentCenterX, ball->currentCenterX + BALL_SIZE,
-                                      ball->currentCenterY, ball->currentCenterY + BALL_SIZE, ball->color);
-                }
-
-                // if the ball is already made and just needs an update
-                else UpdateBallOnScreen(&prevBalls[i], ball, ball->color);
-
-                // update the previous ball array
-                prevBalls[i].CenterX = ball->currentCenterX;
-                prevBalls[i].CenterY = ball->currentCenterY;
+        for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
+            if(gamestate.balls[i].alive && !gamestate.balls[i].kill){
+                UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], gamestate.balls[i].color);
+            }
+            else if(gamestate.balls[i].alive && gamestate.balls[i].kill){
+                UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], LCD_BLACK);
+                gamestate.balls[i].alive = 0;
+                gamestate.balls[i].kill = 0;
+                ballCount--;
             }
         }
 
@@ -979,9 +1184,31 @@ void DrawObjects()
  */
 void MoveLEDs()
 {
-    while(1)
-    {
-        sleep(5);
+    setLedPwm_lp3943( RED, 0xFF );
+    setLedPwm_lp3943( BLUE, 0xFF );
+
+    while(1){
+        uint8_t hostScore = gamestate.LEDScores[0];
+        uint8_t clientScore = gamestate.LEDScores[1];
+        uint8_t hostLEDS = 0;
+        uint8_t clientLEDS = 0;
+        for(int i = 0; i < hostScore; i++){
+            hostLEDS = (hostLEDS<<1) + 1;
+        }
+        for(int i = 0; i < clientScore; i++){
+            clientLEDS = (clientLEDS>>1) + 0x80;
+        }
+        uint16_t REDdata = (hostLEDS<<8);
+        uint16_t BLUEdata = clientLEDS;
+
+        G8RTOS_WaitSemaphore(&LEDREADY);
+
+        setLedMode_lp3943( RED, REDdata);
+        setLedMode_lp3943( BLUE, BLUEdata);
+
+        G8RTOS_SignalSemaphore(&LEDREADY);
+
+        sleep(30);
     }
 }
 
