@@ -12,11 +12,10 @@
  *  UPDATES :
  *  3/29/2019   : File initialization.
  *  4/2/2019    : Connect to game as Host or Client.
+ *	4/10/2019	: LCD and LED semaphores initialized.
  *
  *  TODO    :
- *  1.  Pressing a button disables the interrupts, but they should
- *      be re-enabled at some later time.
- *  2.  Remove BUTTON_BUG directive once Daniel's board has been
+ *  ~  Remove BUTTON_BUG directive once Daniel's board has been
  *      resoldered.
  *
  */
@@ -47,23 +46,19 @@ void main(void)
     G8RTOS_Init();
     buttons_init();
     LCD_Init(TP_DISABLE);
+    // write the menu text
+    writeMainMenu(MENU_TEXT_COLOR);
 
     // Initialize semaphores
     G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
     G8RTOS_InitSemaphore(&GAMESTATE_SEMAPHORE, 1);
-
-    // write the menu text
-    writeMainMenu(MENU_TEXT_COLOR);
-
-    // Do not initialize any of the threads until the user decides
+	G8RTOS_InitSemaphore(&LCDREADY, 1);
+    G8RTOS_InitSemaphore(&LEDREADY, 1);    // Do not initialize any of the threads until the user decides
     // whether to host the game or to be on the client side.
     while (1)
     {
         if (myPlayerType == Host)
         {
-            // connect to the WiFi
-            initCC3100(Host);
-
             // Initialize HOST-side threads
             G8RTOS_AddThread( &CreateGame, 0, 0xFFFFFFFF, "CREATE_GAME_____" ); // lowest priority
             break;
@@ -71,9 +66,6 @@ void main(void)
 
         else if ( myPlayerType == Client )
         {
-            // connect to the WiFi
-            initCC3100(Client);
-
             // Initialize CLIENT-side threads
             G8RTOS_AddThread( &JoinGame, 0, 0xFFFFFFFF, "JOIN_GAME_______" ); // lowest priority
             break;
@@ -108,14 +100,30 @@ void PORT4_IRQHandler( void )
     if ( (P4->IFG & BIT4) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
         myPlayerType = Host;
         GameInitMode = 0;
     }
     else if ( (P4->IFG & BIT5) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
         myPlayerType = Client;
         GameInitMode = 0;
+    }
+
+    // determine the next game mode
+    else if ( (P4->IFG & BIT4))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = NextGame;
+    }
+    else if ( (P4->IFG & BIT5))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = EndGame;
     }
 #endif
 
@@ -127,10 +135,11 @@ void PORT4_IRQHandler( void )
 void PORT5_IRQHandler( void )
 {
 
-    // MENU NAVIGATION MODE --------------------------------------
+    // MAIN MENU NAVIGATION MODE --------------------------------------
     if ( (P5->IFG & BIT4 || P5->IFG & BIT5) && GameInitMode == 1 )
     {
         NVIC_DisableIRQ(PORT5_IRQn);
+        NVIC_DisableIRQ(PORT4_IRQn);
         myPlayerType = Client;
         GameInitMode = 0;
     }
