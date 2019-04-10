@@ -40,14 +40,13 @@ uint8_t     GameInitMode = 1;       // determines if the buttons are used as gam
 // ================================== MAIN PROGRAM ===============================
 void main(void)
 {
-
-
     WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;     // stop watchdog timer
 
     // Initialize and launch RTOS
     G8RTOS_Init();
     buttons_init();
     LCD_Init(TP_DISABLE);
+
     // write the menu text
     writeMainMenu(MENU_TEXT_COLOR);
 
