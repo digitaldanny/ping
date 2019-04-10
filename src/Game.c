@@ -365,7 +365,7 @@ void CreateGame()
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
     G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
@@ -453,9 +453,11 @@ void ReceiveDataFromClient()
         // thread is put to sleep to avoid deadlock.
         do
         {
+            G8RTOS_WaitSemaphore(&LCDREADY);
             G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
             result = ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
             G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalsSemaphore(&LCDREADY);
             sleep(1); // avoid deadlock
 
         } while ( result < 0 );
@@ -917,7 +919,7 @@ void JoinGame()
 
     G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &ReceiveDataFromHost, 10, 0xFFFFFFFF,                 "RECEIVE_DATA____" );
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &MoveLEDs, 244, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
@@ -964,9 +966,11 @@ void ReceiveDataFromHost()
         do
         {
             // 1. Receive packet from the host
+            G8RTOS_WaitSemaphore(&LCDREADY);
             G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
             result = ReceiveData( (_u8*)&gamestate, sizeof(gamestate));
             G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalSemaphore(&LCDREADY);
         } while ( result < 0 );
 
         // 3. Check if the game is done. Add EndOfGameHost thread if done.
