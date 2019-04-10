@@ -396,6 +396,7 @@ void G8RTOS_KillAllOthers()
 
     EndCriticalSection(primask);
 }
+
 // a thread calls the KillSelf function to send its own ID to the KillThread
 // function
 sched_err_code_t G8RTOS_KillSelf()

@@ -88,7 +88,7 @@ extern "C" {
 #ifdef DANNY_HOTSPOT
 #define SSID_NAME       "Daniel"  /* Access point name to connect to. */
 #define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
-// #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
+//#define SEC_TYPE        SL_SEC_TYPE_OPEN          /* Security type of the Access piont */
 #define PASSKEY         "eel4930pass"               /* Password in case of secure AP */
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
 
@@ -124,7 +124,7 @@ extern "C" {
 /*
  * Values for below macros shall be modified based on current time
  */
-#define DATE        6      /* Current Date */
+#define DATE        2      /* Current Date */
 #define MONTH       4       /* Month */
 #define YEAR        2019    /* Current year */
 #define HOUR        17      /* Time - hours */

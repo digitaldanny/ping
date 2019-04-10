@@ -33,6 +33,8 @@
 playerType  myPlayerType = None;    // undefined to avoid launching threads
 uint8_t     GameInitMode = 1;       // determines if the buttons are used as game controls or menu navigation
 
+
+
 #ifdef MAIN
 
 // ================================== MAIN PROGRAM ===============================
@@ -53,7 +55,12 @@ void main(void)
     G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
     G8RTOS_InitSemaphore(&GAMESTATE_SEMAPHORE, 1);
 	G8RTOS_InitSemaphore(&LCDREADY, 1);
-    G8RTOS_InitSemaphore(&LEDREADY, 1);    // Do not initialize any of the threads until the user decides
+    G8RTOS_InitSemaphore(&LEDREADY, 1);    
+  
+    // write the menu text
+    writeMainMenu(MENU_TEXT_COLOR);
+
+    // Do not initialize any of the threads until the user decides
     // whether to host the game or to be on the client side.
     while (1)
     {
