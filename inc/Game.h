@@ -10,14 +10,16 @@
 #include "LCD_empty.h"
 #include "time.h"
 #include "math.h"
+
 /*********************************************** Includes ********************************************************************/
 
 /*********************************************** Externs ********************************************************************/
 
 /* Semaphores here */ 
-semaphore_t LCDREADY;
-semaphore_t LEDREADY;
-
+extern semaphore_t CC3100_SEMAPHORE;
+extern semaphore_t GAMESTATE_SEMAPHORE;
+extern semaphore_t LCDREADY;
+extern semaphore_t LEDREADY;
 
 /*********************************************** Externs ********************************************************************/
 
@@ -170,7 +172,7 @@ typedef struct
     int16_t currentCenterY;
     uint16_t color;
     bool alive;
-    bool kill;
+	bool kill;
 } Ball_t;
 
 /*
