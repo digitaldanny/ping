@@ -682,7 +682,7 @@ void sleep(uint32_t durationMS)
     CurrentlyRunningThread->sleep_count = SystemTime + durationMS;
     CurrentlyRunningThread->asleep = 0x1;
     StartContextSwitch();
-    while(CurrentlyRunningThread->asleep);
+	while(CurrentlyRunningThread->asleep);
 }
 
 /*********************************************** UPDATES *********************************************************************/

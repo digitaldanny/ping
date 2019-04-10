@@ -9,20 +9,15 @@
  * Game.c
  *
  *  Created     : 4/2/2019
- *  Last Edit   : 4/2/2019
+ *  Last Edit   : 4/9/2019
  *
  *  UPDATES     :
  *  4/2/2019    : Initialized threads and game functions.
+ *  4/6/2019    : Boards can send/receive UDP packets
+ *  4/7/2019    : Boards send/receive packets more efficiently
+ *  4/9/2019    : Collisions, animations, main menu, and kill ball
  *
  *  TODO        :
- *  ~ Update player displacement/ready on initialization in JoinGame.
- *  ~ Does the player.acknowledge need to be updated in JoinGame?
- *  ~ Port number may be incorrect in the header configurations
- *  ~ Does it matter what the CreateGame sends back to client when acknowledging?
- *  ~ Initialize board in CreateGame and JoinGame
- *  ~ What is the difference between gamestate.gameDone and gamestate.winner?
- *  ~ Finish moveball collision logic
- *  ~ Possibly need a semaphore for the player center data.
  *
  */
 
@@ -33,8 +28,15 @@ GameState_t gamestate;
 uint8_t playerCount = 0;
 uint8_t ballCount = 0;
 PrevBall_t previousBalls[MAX_NUM_OF_BALLS];
-
 gameNextState nextState = NA;   // set next game state to NA
+
+// ======================      SEMAPHORES          ==========================
+semaphore_t CC3100_SEMAPHORE;
+semaphore_t GAMESTATE_SEMAPHORE;
+semaphore_t LCDREADY;
+semaphore_t LEDREADY;
+
+// ======================     GAME FUNCTIONS       ==========================
 
 
 // ======================      SEMAPHORES          ==========================
@@ -111,11 +113,10 @@ void DrawPlayer(GeneralPlayerInfo_t * player)
 
     // wait for LCD semaphore
     G8RTOS_WaitSemaphore(&LCDREADY);
-
+  
     LCD_DrawRectangle(player->currentCenter - PADDLE_LEN_D2, player->currentCenter + PADDLE_LEN_D2,
                       yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, player->color);
-
-    // signal the LCD semaphore
+ 
     G8RTOS_SignalSemaphore(&LCDREADY);
 }
 
@@ -161,10 +162,9 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
             // Calculate the starting x position for the UNCOMMON NEW player's area on the LEFT side
             starting_new_data_window = outPlayer->currentCenter - PADDLE_LEN_D2;
         }
-
-        // wait for LCD semaphore
+      
         G8RTOS_WaitSemaphore(&LCDREADY);
-
+      
         // erase the UNCOMMON old player position first
         LCD_DrawRectangle(starting_old_data_window, starting_old_data_window + center_diff,
                           yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, BACK_COLOR);
@@ -172,11 +172,10 @@ void UpdatePlayerOnScreen(PrevPlayer_t * prevPlayerIn, GeneralPlayerInfo_t * out
         // draw the UNCOMMON updated player position
         LCD_DrawRectangle(starting_new_data_window, starting_new_data_window + center_diff,
                           yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, outPlayer->color);
-
-        // signal the LCD semaphore
-        G8RTOS_SignalSemaphore(&LCDREADY);
-
-    }
+      
+		// signal the LCD semaphore
+		G8RTOS_SignalSemaphore(&LCDREADY);    
+	}
 }
 
 /*
@@ -200,6 +199,7 @@ void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_
 
 }
 
+
 /*
  * Initializes and prints initial game state
  */
@@ -220,10 +220,10 @@ void InitBoardState()
     gamestate.gameDone = 0;
     gamestate.numberOfBalls = 0;
     gamestate.winner = 0;
-
+  
     // wait for LCD semaphore
     G8RTOS_WaitSemaphore(&LCDREADY);
-
+  
     // draw the map boundaries
     LCD_Clear(BACK_COLOR);
     LCD_DrawRectangle(ARENA_MIN_X-1, ARENA_MIN_X, ARENA_MIN_Y, ARENA_MAX_Y, LCD_WHITE);
@@ -231,12 +231,12 @@ void InitBoardState()
 
     // signal the LCD semaphore
     G8RTOS_SignalSemaphore(&LCDREADY);
-
+  
     char score_str[3] = {0, 0, 0};
 
     // wait for LCD semaphore
     G8RTOS_WaitSemaphore(&LCDREADY);
-
+  
     // draw the current score of the players
     snprintf( score_str, 2, "%d", gamestate.overallScores[0] );
     LCD_Text(0, MAX_SCREEN_Y - 16 - 1, (uint8_t*)score_str, PLAYER_RED);
@@ -295,16 +295,59 @@ void CreateGame()
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
 #ifdef MULTI
-    // 3. Try to receive packet from the client until return SUCCESS == 0
-    int test = 5;
-    ReceiveData((_u8*)&test, sizeof(test));
-    while( ReceiveData((_u8*)&gamestate.player, sizeof(gamestate.player)) );
+
+    initCC3100(Host); // connect to the network
+
+    // 3. Try to receive packet from the client until return SUCCESS
+#ifndef HANDSHAKE2
+
+    uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
+    while( handshake != 'C' )
+    {
+        ReceiveData((_u8*)&handshake, sizeof(handshake));
+    }
+
+    // STATIC INLINE THIS ---------------------------------------------------------------------------------
+
+    // once the synchronization byte has been received,
+    // the host is ready to receive the client's ip so it
+    // can begin sending messages back to it. Because the bytes
+    // are sent MSB first and MSB begins at highest address of
+    // gamestate.player.IP_address, receieved data must first
+    // be stored in a buffer and reorganized.
+    ReceiveData( (_u8*)&gamestate.player.IP_address     , 4); // ip address
+    ReceiveData( (_u8*)&gamestate.player.displacement   , 2); // ip address
+    ReceiveData( (_u8*)&gamestate.player.playerNumber   , 1);
+    ReceiveData( (_u8*)&gamestate.player.ready          , 1);
+    ReceiveData( (_u8*)&gamestate.player.joined         , 1);
+    ReceiveData( (_u8*)&gamestate.player.acknowledge    , 1);
+
+    // 4. Acknowledge client to tell them they joined the game.
+    handshake = 'H';
+    SendData( (_u8*)&handshake, gamestate.player.IP_address, sizeof(handshake) );
+
+    // Wait for client to sync with host by acknowledging that
+    // it received the host message.
+    while( handshake != 'C' )
+    {
+        ReceiveData((_u8*)&handshake, sizeof(handshake));
+    }
+#endif
+#ifdef HANDSHAKE2
+    while( ReceiveData((_u8*)&gamestate.player, sizeof(gamestate.player)) < 0 );
 
     // 4. Acknowledge client by telling them they joined the game.
     gamestate.player.joined = true;
-    SendData( (_u8*)&gamestate.player.joined ,
-              gamestate.player.IP_address    ,
-              sizeof(gamestate.player.joined) );
+    SendData( (_u8*)&gamestate.player, gamestate.player.IP_address, sizeof(gamestate.player) );
+
+    // Wait for client to sync with host by acknowledging that
+    // it received the host message.
+    do
+    {
+        ReceiveData((uint8_t*)&gamestate.player, sizeof(gamestate.player));
+    } while ( gamestate.player.acknowledge == false );
+
+#endif
 #endif
 
     GREEN_ON; // use LED to indicate WiFi connection as HOST
@@ -317,8 +360,8 @@ void CreateGame()
     G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
-    //G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    //G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
     G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
@@ -344,7 +387,24 @@ void ReceiveDataFromClient()
 {
     while(1)
     {
-        sleep(50);
+        // if the response is greater than 0, valid data was returned
+        // to the gamestate. If not, no valid data was returned and
+        // thread is put to sleep to avoid deadlock.
+        do
+        {
+            G8RTOS_WaitSemaphore(&LCDREADY);
+            G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+            result = ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
+            G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalSemaphore(&LCDREADY);
+            sleep(1); // avoid deadlock
+
+        } while ( result < 0 );
+
+        // update the player's center
+        gamestate.players[1].currentCenter = gamestate.player.displacement;
+
+        sleep(2);
     }
 }
 
@@ -575,6 +635,30 @@ void MoveBall()
                 }
                 if(yvel == 0){  yvel = -1;}
             }
+            else{
+                ball->color = LCD_RED;
+                if(ball->currentCenterX < gamestate.players[0].currentCenter - PADDLE_LEN_D2>>1){
+                    // left 1/4 of host side
+                    xvel += 1;
+                    if(xvel > 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                else if(ball->currentCenterX > gamestate.players[0].currentCenter + PADDLE_LEN_D2>>1){
+                    // right 1/4 of host side
+                    xvel -= 1;
+                    if(xvel < 0){
+                        yvel += 1;
+                    }
+                    else{
+                        yvel -= 1;
+                    }
+                }
+                if(yvel == 0){  yvel = -1;}
+            }
 
             // determine the x and y directions
 
@@ -582,6 +666,8 @@ void MoveBall()
 
 
 
+
+            // determine the x and y directions
 
         }
         else if((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) ||
@@ -620,16 +706,14 @@ void MoveBall()
 
         //UpdateBallOnScreen(previousBall, ball, ball->color);
 
-
         sleep(35);
     }
-
-
-
 
 #endif
 
 }
+
+
 
 /*
  * End of game for the host
@@ -672,8 +756,6 @@ void EndOfGameHost()
     G8RTOS_SignalSemaphore(&LCDREADY);
     G8RTOS_SignalSemaphore(&LEDREADY);
     ballCount = 0;
-
-
 
 
     // declare variables
@@ -724,8 +806,8 @@ void EndOfGameHost()
     G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
     G8RTOS_AddThread( &DrawObjects, DEFAULT_PRIORITY, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
-    //G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    //G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
     G8RTOS_AddThread( &MoveLEDs, 254, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
 
     // 7. Kill self.
@@ -766,8 +848,46 @@ void JoinGame()
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
     P2->DIR |= (BIT0 | BIT1 | BIT2); // set R.G.B direction
 
-    // 3. Wait for server response showing that it acknowledges the new player
-    while( ReceiveData( (_u8*)&player.joined, sizeof(player.joined)) );
+#ifdef MULTI
+
+    initCC3100(Client); // connect to the network
+
+#ifndef HANDSHAKE2
+    // 2. Send player data into the host.
+    // 3. Try to send player packet to host until host acknowledges
+    //    that it received the player information.
+
+    uint8_t handshake = 'X';  // either 'H' or 'C' to show message sent or received from Host or Client.
+    while( handshake != 'H' )
+    {
+        handshake = 'C';
+        SendData(       (_u8*)&handshake, HOST_IP_ADDR, 1               );   // start synchronization
+        SendData(       (_u8*)&player, HOST_IP_ADDR, sizeof(player)     );   // send MSB first of all player data
+        ReceiveData(    (_u8*)&handshake, sizeof(handshake)             );   // check if host ackknowledges
+    }
+
+    // Sync with host by telling it that client has received the
+    // previous message
+    handshake = 'C';
+    SendData( (_u8*)&handshake, HOST_IP_ADDR, 1 );
+#endif
+#ifdef HANDSHAKE2
+
+    // wait for the host to receive message and notify
+    // client that they joined the game.
+    do
+    {
+        SendData(       (uint8_t*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );   // start handshake
+        ReceiveData(    (uint8_t*)&gamestate.player, sizeof(gamestate.player) );   // check if host acknowledges
+    } while( gamestate.player.joined == false );
+
+    // 4. Acknowledge client to tell them they have received
+    // the message about joining the game and the game can begin.
+    gamestate.player.acknowledge = true;
+    SendData( (uint8_t*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
+
+#endif
+#endif
 
     // 4. If you've joined the game, acknowledge you've joined to the host
     //      and show connection through LED.
@@ -781,7 +901,7 @@ void JoinGame()
 
     G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &ReceiveDataFromHost, 10, 0xFFFFFFFF,                 "RECEIVE_DATA____" );
     G8RTOS_AddThread( &DrawObjects, DEFAULT_PRIORITY, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &MoveLEDs, 244, 0xFFFFFFFF,                           "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
@@ -797,6 +917,19 @@ void ReceiveDataFromHost()
 {
     while(1)
     {
+        do
+        {
+            // 1. Receive packet from the host
+            G8RTOS_WaitSemaphore(&LCDREADY);
+            G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+            result = ReceiveData( (_u8*)&gamestate, sizeof(gamestate));
+            G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
+            G8RTOS_SignalSemaphore(&LCDREADY);
+        } while ( result < 0 );
+
+        // 3. Check if the game is done. Add EndOfGameHost thread if done.
+        if ( gamestate.gameDone == true )
+            G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
     }
 }
