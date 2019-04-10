@@ -48,6 +48,7 @@ typedef enum
  */
 #ifdef DANNY_HOTSPOT
 // #define HOST_IP_ADDR           0xC0A80102               // IP address of server to connect to
+#ifdef DANNY_HOTSPOT
 #define HOST_IP_ADDR           0xAC140A05               // IP address of server to connect to
 #define PORT_NUM               5001                     // Port number to be used
 #define NO_OF_PACKETS          1                        // Number of packets to send out

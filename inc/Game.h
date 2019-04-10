@@ -210,6 +210,15 @@ typedef struct
 /*********************************************** Data Structures ********************************************************************/
 
 /*********************************************** Game Functions *********************************************************************/
+
+// This function copies over a gamestate into a new
+// packet to be sent over Wi-Fi.
+void fillPacket ( GameState_t * gs, GameState_t * packet );
+
+// This function copies over a packet into the global gamestate
+// using the fillPacket function to minimize program mem usage.
+void emptyPacket( GameState_t * gs, GameState_t * packet );
+
 // initialize interrupts for input buttons B0, B1, B2, B3
 // on ports 4 and 5.
 void buttons_init(void);
