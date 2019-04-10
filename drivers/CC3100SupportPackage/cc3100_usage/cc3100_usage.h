@@ -46,6 +46,7 @@ typedef enum
 /* IP addressed of server side socket.
  * Should be in long format, E.g: 0xc0a8010a == 192.168.1.10
  */
+#ifdef DANNY_HOTSPOT
 // #define HOST_IP_ADDR           0xC0A80102               // IP address of server to connect to
 #ifdef DANNY_HOTSPOT
 #define HOST_IP_ADDR           0xAC140A05               // IP address of server to connect to

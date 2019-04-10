@@ -17,7 +17,7 @@
  *  4/2/2019    : Initialized threads and game functions.
  *  4/6/2019    : Boards can send/receive UDP packets
  *  4/7/2019    : Boards send/receive packets more efficiently
- *  4/9/2019    : Collisions, animations, main menu, and kill ball
+ *  4/8/2019    : Collisions, animations, main menu, and kill ball
  *
  *  TODO        :
  *
@@ -672,30 +672,6 @@ void MoveBall()
                     }
                 }
                 if(yvel == 0){  yvel = 1;}
-            }
-            else{
-                ball->color = LCD_RED;
-                if(ball->currentCenterX < gamestate.players[0].currentCenter - PADDLE_LEN_D2>>1){
-                    // left 1/4 of host side
-                    xvel += 1;
-                    if(xvel > 0){
-                        yvel += 1;
-                    }
-                    else{
-                        yvel -= 1;
-                    }
-                }
-                else if(ball->currentCenterX > gamestate.players[0].currentCenter + PADDLE_LEN_D2>>1){
-                    // right 1/4 of host side
-                    xvel -= 1;
-                    if(xvel < 0){
-                        yvel += 1;
-                    }
-                    else{
-                        yvel -= 1;
-                    }
-                }
-                if(yvel == 0){  yvel = -1;}
             }
 
             // determine the x and y directions
