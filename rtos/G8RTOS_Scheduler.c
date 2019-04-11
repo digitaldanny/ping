@@ -1,4 +1,4 @@
-#define ORIG
+#define OPT
 
 /*
  *  Preprocessor Scheduler Selection
@@ -315,10 +315,12 @@ sched_err_code_t G8RTOS_Launch_Priority()
 
 // KillThread function takes in a threadId and removes it from the linked list
 // of threads
+
+static const struct tcb EmptyStruct;
+uint8_t threadNUM = 0;
 sched_err_code_t G8RTOS_KillThread( threadId_t id )
 {
     uint32_t primask = StartCriticalSection();
-
     // variable declaration
     sched_err_code_t err = NO_ERROR;
     tcb_t* tempTcb = CurrentlyRunningThread;
@@ -332,11 +334,12 @@ sched_err_code_t G8RTOS_KillThread( threadId_t id )
     else
     {
         // search for requested thread ID + set error code
-        for (int i = 0; i < NumberOfThreads; ++i)
+        for (int i = 0; i < MAX_THREADS; ++i)
         {
             // id was found
             if ( tempTcb->id == id && tempTcb->alive )
             {
+                threadNUM = i;
                 err = NO_ERROR;
                 break;
             }
@@ -370,15 +373,18 @@ sched_err_code_t G8RTOS_KillThread( threadId_t id )
 #endif
 
             // update next + previous tcb pointers to point at each other
+            if (tempTcb == CurrentlyRunningThread){
+                StartContextSwitch();
+            }
             tempTcb->next->prev = tempTcb->prev;
             tempTcb->prev->next = tempTcb->next;
+            //tempTcb->next = 0;
+            //tempTcb->prev = 0;
+            //tempTcb->sp = EmptyStruct.sp;
         }
     }
-
     EndCriticalSection(primask);
     __enable_interrupts();
-
-    if (tempTcb == CurrentlyRunningThread) StartContextSwitch();
 
     return err;
 }
@@ -391,6 +397,7 @@ void G8RTOS_KillAllOthers()
     {
         if ( currentThread.id != threadControlBlocks[i].id && threadControlBlocks[i].name[0] != 'I'){
             sched_err_code_t err = G8RTOS_KillThread(threadControlBlocks[i].id);
+            //threadControlBlocks[i] = EmptyStruct;
         }
     }
 
@@ -401,7 +408,21 @@ void G8RTOS_KillAllOthers()
 // function
 sched_err_code_t G8RTOS_KillSelf()
 {
-    sched_err_code_t err = G8RTOS_KillThread( CurrentlyRunningThread->id );
+    uint32_t primask = StartCriticalSection();
+    //sched_err_code_t err = NO_ERROR;
+
+    //for (int i = 0; i < MAX_THREADS; i++)
+    //{
+     //   if ( CurrentlyRunningThread->id == threadControlBlocks[i].id){
+            sched_err_code_t err = G8RTOS_KillThread( CurrentlyRunningThread->id );
+            //CurrentlyRunningThread->next = 0;
+            //CurrentlyRunningThread->prev = 0;
+            //CurrentlyRunningThread->sp = EmptyStruct.sp;
+            //threadControlBlocks[i] = EmptyStruct;
+            //break;
+    //    }
+    //}
+    EndCriticalSection(primask);
     return err;
 }
 
@@ -536,10 +557,12 @@ sched_err_code_t G8RTOS_AddThread(    void (*threadToAdd)(void), uint8_t priorit
         // - Sets tcb stack pointer to top of thread stack + priority
         tcb_t* tempTCB = &threadControlBlocks[priorityIndex];
         tempTCB->sp = &threadStacks[priorityIndex][STACKSIZE - 16];
+        //threadControlBlocks[priorityIndex].StackPointer = &threadStacks[priorityIndex][STACKSIZE - 16];//assign first stack pointer for the thread
         tempTCB->priority = priority;
         tempTCB->priority_perm = priority;
         tempTCB->alive = true;
         tempTCB->age = 0;
+        tempTCB->blocked = 0;
         tempTCB->starvation_age = starvation_age;
         tempTCB->id = ((IDCounter++) << 16) | (uint32_t)tempTCB;
 

@@ -73,7 +73,7 @@ void main(void)
         else if ( myPlayerType == Client )
         {
             // Initialize CLIENT-side threads
-            G8RTOS_AddThread( &JoinGame, 0, 0xFFFFFFFF, "JOIN_GAME_______" ); // lowest priority
+            //G8RTOS_AddThread( &JoinGame, 0, 0xFFFFFFFF, "JOIN_GAME_______" ); // lowest priority
             break;
         }
     }
