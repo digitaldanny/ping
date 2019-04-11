@@ -19,6 +19,11 @@
  *  4/7/2019    : Boards send/receive packets more efficiently
  *  4/8/2019    : Collisions, animations, main menu, and kill ball
  *  4/10/2019   : All branch merge bugs squashed, wifi connection stabilized
+ *  4/10/2019   : changed priority for drawing to 10 whenever a draw thread is
+ *              : removed uint8_t infront of score_str
+ *              : fixed killthread where past blocked info was not cleared
+ *              : moved around semaphores
+ *              :  changed priority for drawing to 10 whenever a draw thread is added
  *
  *  TODO        :
  *
@@ -251,13 +256,17 @@ void InitBoardState()
     LCD_DrawRectangle(ARENA_MAX_X, ARENA_MAX_X+1, ARENA_MIN_Y, ARENA_MAX_Y, LCD_WHITE);
   
     char score_str[3] = {0, 0, 0};
-  
+
     // draw the current score of the players
     snprintf( score_str, 2, "%d", gamestate.overallScores[0] );
     LCD_Text(0, MAX_SCREEN_Y - 16 - 1, (uint8_t*)score_str, PLAYER_RED);
+    snprintf( score_str, 3, "%u", gamestate.overallScores[0] );
+    LCD_Text(0, MAX_SCREEN_Y - 16 - 1, score_str, PLAYER_RED);
 
     snprintf( score_str, 2, "%d", gamestate.overallScores[1] );
     LCD_Text(0, 0, (uint8_t*)score_str, PLAYER_BLUE);
+    snprintf( score_str, 3, "%u", gamestate.overallScores[1] );
+    LCD_Text(0, 0, score_str, PLAYER_BLUE);
 }
 
 // ====================== HOST HOST HOST HOST HOST ==========================
@@ -363,10 +372,10 @@ void CreateGame()
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
-    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-
-#ifdef MULTI
+  
+  #ifdef MULTI
     G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
 #endif
 
     // 7. Kill self.
@@ -402,8 +411,8 @@ void SendDataToClient()
     {
         // 2. Send packet
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
-
         SendData( (uint8_t*)&gamestate, gamestate.player.IP_address, sizeof(gamestate) );
+      G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
         // 3. Check if the game is done. Add endofgamehost thread if done.
         // This has to be wrapped in the semaphores because the gameDone
@@ -411,8 +420,6 @@ void SendDataToClient()
         // and the client wouldn't know the game ended.
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
-
-        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
         sleep(2);
     }
@@ -620,7 +627,7 @@ void MoveBall()
             ball->kill = 0;
             ball->color = LCD_WHITE;
             ball->currentCenterX = BALL_SIZE * (rand() % ((ARENA_MAX_X - ARENA_MIN_X - BALL_SIZE)/BALL_SIZE)) + ARENA_MIN_X + 1;
-            ball->currentCenterY = BALL_SIZE * (rand() % (((ARENA_MAX_Y - 80 - ARENA_MIN_Y)/BALL_SIZE)+ 10));
+            ball->currentCenterY = BALL_SIZE * (rand() % (((ARENA_MAX_Y - 80 - ARENA_MIN_Y)/BALL_SIZE)) + 10);
             break;
         }
     }
@@ -642,11 +649,11 @@ void MoveBall()
 
         // test if hitting the top or bottom paddle
         if(((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) &&
-            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2)  &&
-            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE)) ||
-           ((yvel < 0 && ball->currentCenterY + yvel <= ARENA_MIN_Y + PADDLE_WID) &&
-            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2)  &&
-            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE))){
+            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER)) ||
+           ((yvel < 0 && ball->currentCenterY + yvel - 1 <= ARENA_MIN_Y + PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER))){
 
             // reverse the y direction
             yvel = -yvel;
@@ -718,8 +725,11 @@ void MoveBall()
                 gamestate.LEDScores[0] += 1;
             }
             if(gamestate.LEDScores[0] == 8 || gamestate.LEDScores[1] == 8){
-                 // G8RTOS_AddThread( &EndOfGameHost, 0, 0xFFFFFFFF,          "GENERATE_BALL___" );
-                gamestate.gameDone = true;
+              
+   #ifdef SINGLE
+                G8RTOS_AddThread( &EndOfGameHost, 0, 0xFFFFFFFF,          "KillAll___" );
+   #endif
+              gamestate.gameDone = true;
             }
 
             ball->kill = 1;
@@ -757,6 +767,11 @@ void EndOfGameHost()
     G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
     G8RTOS_SignalSemaphore(&LEDREADY);
     G8RTOS_SignalSemaphore(&LCDREADY);
+  
+    // force semaphores to reset here..
+  // shouldn't be required, but fixes semaphore block bug
+    G8RTOS_InitSemaphore(&LCDREADY, 1);
+    G8RTOS_InitSemaphore(&LEDREADY, 1);
 
     // determine winner
     if(gamestate.LEDScores[0] == 8){
@@ -828,12 +843,12 @@ void EndOfGameHost()
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
     G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
-    G8RTOS_AddThread( &DrawObjects, DEFAULT_PRIORITY, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
     G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
     G8RTOS_AddThread( &MoveLEDs, 10, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
-    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    //G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
     // 7. Kill self.
     G8RTOS_KillSelf();
@@ -1044,6 +1059,9 @@ void ReadJoystickClient()
         default                 : displacement = 0;     break;
         }
 
+        // Semaphore doesn't allow player displacement to be sent
+        // before the max and min boundaries are set.
+        //G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
         // move the player's center
         gamestate.player.displacement += displacement;
 
@@ -1059,6 +1077,7 @@ void ReadJoystickClient()
             gamestate.player.displacement = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
 
+        //G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
         sleep(10);
     }
 }
