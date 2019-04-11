@@ -409,19 +409,7 @@ void G8RTOS_KillAllOthers()
 sched_err_code_t G8RTOS_KillSelf()
 {
     uint32_t primask = StartCriticalSection();
-    //sched_err_code_t err = NO_ERROR;
-
-    //for (int i = 0; i < MAX_THREADS; i++)
-    //{
-     //   if ( CurrentlyRunningThread->id == threadControlBlocks[i].id){
-            sched_err_code_t err = G8RTOS_KillThread( CurrentlyRunningThread->id );
-            //CurrentlyRunningThread->next = 0;
-            //CurrentlyRunningThread->prev = 0;
-            //CurrentlyRunningThread->sp = EmptyStruct.sp;
-            //threadControlBlocks[i] = EmptyStruct;
-            //break;
-    //    }
-    //}
+    sched_err_code_t err = G8RTOS_KillThread( CurrentlyRunningThread->id );
     EndCriticalSection(primask);
     return err;
 }
