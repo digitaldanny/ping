@@ -395,9 +395,8 @@ void G8RTOS_KillAllOthers()
     tcb_t currentThread = *CurrentlyRunningThread;
     for (int i = 0; i < MAX_THREADS; i++)
     {
-        if ( currentThread.id != threadControlBlocks[i].id && threadControlBlocks[i].name[0] != 'I'){
+        if ( currentThread.id != threadControlBlocks[i].id ) { // && threadControlBlocks[i].name[0] != 'I'){
             sched_err_code_t err = G8RTOS_KillThread(threadControlBlocks[i].id);
-            //threadControlBlocks[i] = EmptyStruct;
         }
     }
 
