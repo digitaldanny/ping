@@ -47,6 +47,39 @@ semaphore_t LEDREADY;
 
 // ======================     GAME FUNCTIONS       ==========================
 
+void addHostThreads(){
+    G8RTOS_AddThread( &GenerateBall, 20, 0xFFFFFFFF,          "GENERATE_BALL___" );
+    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &ReadJoystickHost, 20, 0xFFFFFFFF,      "READ_JOYSTICK___" );
+    G8RTOS_AddThread( &MoveLEDs, 20, 0xFFFFFFFF,              "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+
+    #ifdef MULTI
+    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
+    #endif
+}
+
+void addClientThreads(){
+    G8RTOS_AddThread( &ReadJoystickClient, 20, 0xFFFFFFFF,                  "READ_JOYSTICK___" );
+    G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
+    G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &MoveLEDs, 20, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
+    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+}
+
+
+
+
+
+
+
+
+
+
+
+
 // This function copies over a gamestate into a new
 // packet to be sent over Wi-Fi.
 void fillPacket ( GameState_t * gs, GameState_t * packet )
@@ -150,6 +183,8 @@ void DrawPlayer(GeneralPlayerInfo_t * player)
                       yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, player->color);
 
     G8RTOS_SignalSemaphore(&LCDREADY);
+
+
 }
 
 /*
@@ -230,12 +265,14 @@ void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_
     LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
                       currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
 
+    G8RTOS_SignalSemaphore(&LCDREADY);
+
     // wrapping the data update doesn't allow the balls to update twice
     // before erasing the original
-    previousBalls->CenterX = currentBall->currentCenterX;
-    previousBalls->CenterY = currentBall->currentCenterY;
+    previousBall->CenterX = currentBall->currentCenterX;
+    previousBall->CenterY = currentBall->currentCenterY;
 
-    G8RTOS_SignalSemaphore(&LCDREADY);
+
 }
 
 
@@ -376,16 +413,7 @@ void CreateGame()
 
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
-    G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
-    G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
-    G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
-    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
-  
-  #ifdef MULTI
-    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-#endif
+    addHostThreads();
 
     // 7. Kill self.
     G8RTOS_KillSelf();
@@ -771,11 +799,6 @@ void EndOfGameHost()
     G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
 
     G8RTOS_KillAllOthers();
-
-    // signal semaphore
-    G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-    G8RTOS_SignalSemaphore(&LEDREADY);
-    G8RTOS_SignalSemaphore(&LCDREADY);
   
     // force semaphores to reset here..
   // shouldn't be required, but fixes semaphore block bug
@@ -853,13 +876,7 @@ void EndOfGameHost()
 
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
-    G8RTOS_AddThread( &GenerateBall, DEFAULT_PRIORITY, 0xFFFFFFFF,          "GENERATE_BALL___" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
-    G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
-    G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF,               "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
-    //G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    addHostThreads();
 
     // 7. Kill self.
     G8RTOS_KillSelf();
@@ -941,12 +958,7 @@ void JoinGame()
     //      MoveLEDs, Idle
     InitBoardState();
 
-    G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
-    G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
-    G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
-    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    addClientThreads();
 
     // 6. Kill self.
     G8RTOS_KillSelf();
@@ -1105,11 +1117,6 @@ void EndOfGameClient()
 
         G8RTOS_KillAllOthers();
 
-        // signal semaphore
-        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-        G8RTOS_SignalSemaphore(&LEDREADY);
-        G8RTOS_SignalSemaphore(&LCDREADY);
-
         G8RTOS_InitSemaphore(&LEDREADY, 1);
         G8RTOS_InitSemaphore(&LCDREADY, 1);
         G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
@@ -1163,12 +1170,7 @@ void EndOfGameClient()
 
         // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
         //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
-        G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
-        G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
-        G8RTOS_AddThread( &ReceiveDataFromHost, 10, 0xFFFFFFFF,                 "RECEIVE_DATA____" );
-        G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
-        G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,              "MOVE_LEDS_______" );
-        G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+        addClientThreads();
 
         // 7. Kill self.
         G8RTOS_KillSelf();
@@ -1199,6 +1201,7 @@ void DrawObjects()
             // the entire paddle.
             if ( prevPlayers[i].Center == -1 ) {
                 DrawPlayer( &gamestate.players[i] );
+                prevPlayers[i].Center = gamestate.players[i].currentCenter;
             }
             // if this player has already been drawn, only
             // update the parts that need to be redrawn.
