@@ -19,7 +19,28 @@
  *  4/7/2019    : Boards send/receive packets more efficiently
  *  4/8/2019    : Collisions, animations, main menu, and kill ball
  *  4/10/2019   : All branch merge bugs squashed, wifi connection stabilized
+ *  changes made
+ *  changed priority for drawing to 10 whenever a draw thread is added
  *
+ *  removed uint8_t infront of score_str
+ *    // draw the current score of the players
+    snprintf( score_str, 3, "%u", gamestate.overallScores[0] );
+    LCD_Text(0, MAX_SCREEN_Y - 16 - 1, score_str, PLAYER_RED);
+
+    snprintf( score_str, 3, "%u", gamestate.overallScores[1] );
+    LCD_Text(0, 0, score_str, PLAYER_BLUE);
+
+            // test if hitting the top or bottom paddle
+        if(((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER)) ||
+           ((yvel < 0 && ball->currentCenterY + yvel - 1 <= ARENA_MIN_Y + PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER))){
+
+    fixed killthread where past blocked info was not cleared.
+
+    also moved around semaphores
  *  TODO        :
  *
  */
@@ -625,7 +646,7 @@ void MoveBall()
             ball->kill = 0;
             ball->color = LCD_WHITE;
             ball->currentCenterX = BALL_SIZE * (rand() % ((ARENA_MAX_X - ARENA_MIN_X - BALL_SIZE)/BALL_SIZE)) + ARENA_MIN_X + 1;
-            ball->currentCenterY = BALL_SIZE * (rand() % (((ARENA_MAX_Y - 80 - ARENA_MIN_Y)/BALL_SIZE)+ 10));
+            ball->currentCenterY = BALL_SIZE * (rand() % (((ARENA_MAX_Y - 80 - ARENA_MIN_Y)/BALL_SIZE)) + 10);
             break;
         }
     }
@@ -647,11 +668,11 @@ void MoveBall()
 
         // test if hitting the top or bottom paddle
         if(((yvel > 0 && ball->currentCenterY + yvel + BALL_SIZE + 1 >= ARENA_MAX_Y - PADDLE_WID) &&
-            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2)  &&
-            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE)) ||
-           ((yvel < 0 && ball->currentCenterY + yvel <= ARENA_MIN_Y + PADDLE_WID) &&
-            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2)  &&
-            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE))){
+            (ball->currentCenterX >= gamestate.players[0].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[0].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER)) ||
+           ((yvel < 0 && ball->currentCenterY + yvel - 1 <= ARENA_MIN_Y + PADDLE_WID) &&
+            (ball->currentCenterX >= gamestate.players[1].currentCenter - PADDLE_LEN_D2 - PADDLE_BUFFER)  &&
+            (ball->currentCenterX <= gamestate.players[1].currentCenter + PADDLE_LEN_D2 + BALL_SIZE + PADDLE_BUFFER))){
 
             // reverse the y direction
             yvel = -yvel;
