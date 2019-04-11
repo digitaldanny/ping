@@ -272,10 +272,10 @@ void InitBoardState()
 
     // draw the current score of the players
     snprintf( score_str, 3, "%u", gamestate.overallScores[0] );
-    LCD_Text(0, MAX_SCREEN_Y - 16 - 1, (uint8_t*)score_str, PLAYER_RED);
+    LCD_Text(0, MAX_SCREEN_Y - 16 - 1, score_str, PLAYER_RED);
 
     snprintf( score_str, 3, "%u", gamestate.overallScores[1] );
-    LCD_Text(0, 0, (uint8_t*)score_str, PLAYER_BLUE);
+    LCD_Text(0, 0, score_str, PLAYER_BLUE);
 }
 
 // ====================== HOST HOST HOST HOST HOST ==========================
@@ -857,7 +857,7 @@ void EndOfGameHost()
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, DEFAULT_PRIORITY, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToClient, DEFAULT_PRIORITY, 0xFFFFFFFF,      "SEND_DATA_______" );
-    G8RTOS_AddThread( &ReceiveDataFromClient, 10, 0xFFFFFFFF,               "RECEIVE_DATA____" );
+    G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF,               "RECEIVE_DATA____" );
     G8RTOS_AddThread( &MoveLEDs, DEFAULT_PRIORITY, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
     //G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 
