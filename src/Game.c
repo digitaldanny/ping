@@ -34,6 +34,7 @@
 // ======================       GLOBALS            ==========================
 GameState_t gamestate;
 GameState_t packet;
+SpecificPlayerInfo_t client_player;
 uint8_t playerCount = 2;
 uint8_t ballCount = 0;
 PrevBall_t previousBalls[MAX_NUM_OF_BALLS];
@@ -265,14 +266,12 @@ void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_
     LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
                       currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
 
-    G8RTOS_SignalSemaphore(&LCDREADY);
-
     // wrapping the data update doesn't allow the balls to update twice
     // before erasing the original
     previousBall->CenterX = currentBall->currentCenterX;
     previousBall->CenterY = currentBall->currentCenterY;
 
-
+    G8RTOS_SignalSemaphore(&LCDREADY);
 }
 
 
@@ -458,7 +457,7 @@ void SendDataToClient()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
 
-        sleep(5);
+        sleep(2);
     }
 #endif
 }
@@ -511,7 +510,20 @@ void ReceiveDataFromClient()
         } while ( result < 0 );
 
         // update the player's center
-        gamestate.players[1].currentCenter = gamestate.player.displacement;
+        gamestate.players[1].currentCenter += gamestate.player.displacement;
+
+        // player center is too far to the left - limit it.
+        if ( gamestate.players[1].currentCenter - PADDLE_LEN_D2 <= ARENA_MIN_X )
+        {
+            gamestate.players[1].currentCenter = ARENA_MIN_X + PADDLE_LEN_D2 + 1;
+        }
+
+        // player center is too far to the right - limit it.
+        else if ( gamestate.players[1].currentCenter + PADDLE_LEN_D2 > ARENA_MAX_X )
+        {
+            gamestate.players[1].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
+        }
+
 
         sleep(5);
     }
@@ -821,6 +833,7 @@ void EndOfGameHost()
     gamestate.LEDScores[1] = 0;
     for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
         gamestate.balls[i].alive = 0;
+        gamestate.balls[i].kill = 0;
     }
 
     ballCount = 0;
@@ -1015,7 +1028,7 @@ void ReceiveDataFromHost()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
-        sleep(5);
+        sleep(2);
     }
 #endif
 }
@@ -1048,7 +1061,7 @@ void SendDataToHost()
         SendData( (_u8*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
-        sleep(2);
+        sleep(5);
     }
 #endif
 }
@@ -1085,19 +1098,7 @@ void ReadJoystickClient()
         }
 
         // move the player's center
-        gamestate.player.displacement += displacement;
-
-        // player center is too far to the left - limit it.
-        if ( gamestate.player.displacement - PADDLE_LEN_D2 <= ARENA_MIN_X )
-        {
-            gamestate.player.displacement = ARENA_MIN_X + PADDLE_LEN_D2 + 1;
-        }
-
-        // player center is too far to the right - limit it.
-        else if ( gamestate.player.displacement + PADDLE_LEN_D2 > ARENA_MAX_X )
-        {
-            gamestate.player.displacement = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
-        }
+        gamestate.player.displacement = displacement;
 
         sleep(10);
     }
@@ -1136,6 +1137,7 @@ void EndOfGameClient()
         gamestate.LEDScores[1] = 0;
         for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
             gamestate.balls[i].alive = 0;
+            gamestate.balls[i].kill = 0;
         }
 
         ballCount = 0;
@@ -1216,7 +1218,7 @@ void DrawObjects()
             if(gamestate.balls[i].alive && !gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], gamestate.balls[i].color);
             }
-            else if(gamestate.balls[i].alive && gamestate.balls[i].kill){
+            else if(gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], LCD_BLACK);
                 gamestate.balls[i].alive = 0;
                 gamestate.balls[i].kill = 0;

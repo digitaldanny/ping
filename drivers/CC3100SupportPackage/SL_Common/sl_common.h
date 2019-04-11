@@ -1,4 +1,4 @@
-#define DANNY_HOTSPOT
+#define JAKE_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
@@ -100,11 +100,16 @@ extern "C" {
 #endif
 
 #ifdef JAKE_HOTSPOT
-#define SSID_NAME       "iPhone"  /* Access point name to connect to. */
+#define SSID_NAME       "Kevin"  /* Access point name to connect to. */
 #define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2        /* Security type of the Access piont */
 // #define SEC_TYPE        SL_SEC_TYPE_OPEN         /* Security type of the Access piont */
-#define PASSKEY         "snake16000"               /* Password in case of secure AP */
+#define PASSKEY         "12345678"               /* Password in case of secure AP */
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)         /* Password length in case of secure AP */
+
+/* Configuration of the device when it comes up in AP mode */
+#define SSID_AP_MODE       "Kevin"         /* SSID of the CC3100 in AP mode */
+#define PASSWORD_AP_MODE   "12345678"                      /* Password of CC3100 AP */
+#define SEC_TYPE_AP_MODE   SL_SEC_TYPE_OPEN         /* Can take SL_SEC_TYPE_WEP or */
 #endif
 
 #ifdef DANNY_ROUTER
