@@ -40,6 +40,8 @@ uint8_t ballCount = 0;
 PrevBall_t previousBalls[MAX_NUM_OF_BALLS];
 gameNextState nextState = NA;   // set next game state to NA
 int16_t displacement = 160;
+playerType  myPlayerType = None;
+uint8_t     GameInitMode = 1;
 
 
 // ======================      SEMAPHORES          ==========================
@@ -144,7 +146,7 @@ void writeGameMenuHost( uint16_t Color )
     G8RTOS_WaitSemaphore(&LCDREADY);
 
     LCD_Text(MAX_SCREEN_X/2 - 7*8, MAX_SCREEN_Y/2-8, "B0 -> Next Game", Color);
-    LCD_Text(MAX_SCREEN_X/2 - 7*8, MAX_SCREEN_Y/2+8, "B2 -> End Game", Color);
+    // LCD_Text(MAX_SCREEN_X/2 - 7*8, MAX_SCREEN_Y/2+8, "B2 -> End Game", Color);
 
     // signal semaphore
     G8RTOS_SignalSemaphore(&LCDREADY);
@@ -190,8 +192,6 @@ void DrawPlayer(GeneralPlayerInfo_t * player)
                       yCenter - PADDLE_WID_D2, yCenter + PADDLE_WID_D2, player->color);
 
     G8RTOS_SignalSemaphore(&LCDREADY);
-
-
 }
 
 /*
@@ -416,7 +416,6 @@ void CreateGame()
 
     // 5. Initialize the board (draw arena, players, scores)
     InitBoardState();
-    addHostThreads();
 
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
@@ -868,7 +867,7 @@ void EndOfGameHost()
     setLedMode_lp3943( BLUE, 0x0000);
 
     // delay for 1 secondish
-    for (long long i = 0; i < 1000000; i++);
+    for (int i = 0; i < 100000; i++);
 
     writeGameMenuHost(LCD_WHITE);
     nextState = NA;   // set next game state to NA
@@ -981,7 +980,7 @@ void JoinGame()
     //      ReadJoystickClient, SendDataToHost, ReceiveDataFromHost, DrawObjects,
     //      MoveLEDs, Idle
     InitBoardState();
-  
+
     addClientThreads();
 
     // 6. Kill self.
@@ -1155,7 +1154,7 @@ void EndOfGameClient()
         setLedMode_lp3943( BLUE, 0x0000);
 
         // delay for 1 secondish
-        for (long long i = 0; i < 1000000; i++);
+        for (int i = 0; i < 100000; i++);
 
         writeGameMenuClient(LCD_WHITE);
 
@@ -1234,6 +1233,7 @@ void DrawObjects()
             if(previousBalls[i].CenterX < ARENA_MIN_X){
                 previousBalls[i].CenterY = 120;
             }
+
             // ALIVE && !KILL = REDRAW STATE
             if(gamestate.balls[i].alive && !gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], gamestate.balls[i].color);
@@ -1303,3 +1303,58 @@ void MoveLEDs()
  * Idle thread to avoid deadlocks and RTOS end
  */
 void IdleThread() { while(1); }
+
+/* ===================== APERIODIC APERIODIC APERIODIC ====================== */
+void ButtonPress ( void )
+{
+    // PORT 4 INTERRUPT ROUTINES ---------------------------------
+    // Daughter board buttons B2, B3 need to be resoldered.
+    // Until then, use this configuration...
+    // B0 = UP (BIT4), B1 = RIGHT (BIT5) -------------------------
+    if ( (P4->IFG & BIT4) && GameInitMode == 1 )
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        myPlayerType = Host;
+        GameInitMode = 0;
+    }
+    else if ( (P4->IFG & BIT5) && GameInitMode == 1 )
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        myPlayerType = Client;
+        GameInitMode = 0;
+    }
+
+    // determine the next game mode
+    else if ( (P4->IFG & BIT4))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = NextGame;
+    }
+    else if ( (P4->IFG & BIT5))
+    {
+        NVIC_DisableIRQ(PORT4_IRQn);
+        NVIC_DisableIRQ(PORT5_IRQn);
+        nextState = EndGame;
+    }
+
+    // B0 = UP (BIT4), B1 = RIGHT (BIT5) --------------------------
+
+    P4->IFG &= ~(BIT4 | BIT5);
+
+    // PORT 5 INTERRUPT ROUTINE ---------------------------------------
+    // MAIN MENU NAVIGATION MODE --------------------------------------
+    if ( (P5->IFG & BIT4 || P5->IFG & BIT5) && GameInitMode == 1 )
+    {
+        NVIC_DisableIRQ(PORT5_IRQn);
+        NVIC_DisableIRQ(PORT4_IRQn);
+        myPlayerType = Client;
+        GameInitMode = 0;
+    }
+
+    // B2 = DOWN (BIT4), B3 = LEFT (BIT5) ------------------------
+
+    P5->IFG &= ~(BIT4 | BIT5);
+}

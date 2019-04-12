@@ -30,10 +30,6 @@
 #define TP_DISABLE  0
 
 // GLOBALS -------------------------------------------
-playerType  myPlayerType = None;    // undefined to avoid launching threads
-uint8_t     GameInitMode = 1;       // determines if the buttons are used as game controls or menu navigation
-
-
 
 #ifdef MAIN
 
@@ -46,6 +42,9 @@ void main(void)
     G8RTOS_Init();
     buttons_init();
     LCD_Init(TP_DISABLE);
+
+    G8RTOS_AddAperiodicEvent_Priority(&ButtonPress, 0, PORT4_IRQn);
+    G8RTOS_AddAperiodicEvent_Priority(&ButtonPress, 0, PORT5_IRQn);
 
     // write the menu text
     writeMainMenu(MENU_TEXT_COLOR);
@@ -85,73 +84,4 @@ void main(void)
     G8RTOS_Launch_Priority();
 }
 
-// ================================ INTERRUPT SERVICE ROUTINES ===========================
-void PORT4_IRQHandler( void )
-{
-
-#ifndef BUTTON_BUG
-    // B0 = UP (BIT4), B1 = RIGHT (BIT5) -------------------------
-    if ( (P4->IFG & BIT4 || P4->IFG & BIT5) && GameInitMode == 1 )
-    {
-        NVIC_DisableIRQ(PORT4_IRQn);
-        myPlayerType = Host;
-        GameInitMode = 0;
-    }
-#endif
-
-#ifdef BUTTON_BUG
-    // Daughter board buttons B2, B3 need to be resoldered.
-    // Until then, use this configuration...
-    // B0 = UP (BIT4), B1 = RIGHT (BIT5) -------------------------
-    if ( (P4->IFG & BIT4) && GameInitMode == 1 )
-    {
-        NVIC_DisableIRQ(PORT4_IRQn);
-        NVIC_DisableIRQ(PORT5_IRQn);
-        myPlayerType = Host;
-        GameInitMode = 0;
-    }
-    else if ( (P4->IFG & BIT5) && GameInitMode == 1 )
-    {
-        NVIC_DisableIRQ(PORT4_IRQn);
-        NVIC_DisableIRQ(PORT5_IRQn);
-        myPlayerType = Client;
-        GameInitMode = 0;
-    }
-
-    // determine the next game mode
-    else if ( (P4->IFG & BIT4))
-    {
-        NVIC_DisableIRQ(PORT4_IRQn);
-        NVIC_DisableIRQ(PORT5_IRQn);
-        nextState = NextGame;
-    }
-    else if ( (P4->IFG & BIT5))
-    {
-        NVIC_DisableIRQ(PORT4_IRQn);
-        NVIC_DisableIRQ(PORT5_IRQn);
-        nextState = EndGame;
-    }
-#endif
-
-    // B0 = UP (BIT4), B1 = RIGHT (BIT5) --------------------------
-
-    P4->IFG &= ~(BIT4 | BIT5);
-}
-
-void PORT5_IRQHandler( void )
-{
-
-    // MAIN MENU NAVIGATION MODE --------------------------------------
-    if ( (P5->IFG & BIT4 || P5->IFG & BIT5) && GameInitMode == 1 )
-    {
-        NVIC_DisableIRQ(PORT5_IRQn);
-        NVIC_DisableIRQ(PORT4_IRQn);
-        myPlayerType = Client;
-        GameInitMode = 0;
-    }
-
-    // B2 = DOWN (BIT4), B3 = LEFT (BIT5) ------------------------
-
-    P5->IFG &= ~(BIT4 | BIT5);
-}
 #endif

@@ -21,6 +21,9 @@ extern semaphore_t GAMESTATE_SEMAPHORE;
 extern semaphore_t LCDREADY;
 extern semaphore_t LEDREADY;
 
+extern playerType  myPlayerType;    // undefined to avoid launching threads
+extern uint8_t     GameInitMode;    // determines if the buttons are used as game controls or menu navigation
+
 /*********************************************** Externs ********************************************************************/
 
 // CONFIGURATION MACROS -------------------------------------------------------------
@@ -174,7 +177,7 @@ typedef struct
     int16_t currentCenterY;
     uint16_t color;
     bool alive;
-	bool kill;
+    bool kill;
 } Ball_t;
 
 /*
@@ -344,5 +347,7 @@ void InitBoardState();
 
 /*********************************************** Public Functions *********************************************************************/
 
+/* ============================== APERIODIC THREADS ===================================== */
+void ButtonPress ( void );
 
 #endif /* GAME_H_ */
