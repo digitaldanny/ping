@@ -397,7 +397,6 @@ void G8RTOS_KillAllOthers()
     {
         if ( currentThread.id != threadControlBlocks[i].id){
             sched_err_code_t err = G8RTOS_KillThread(threadControlBlocks[i].id);
-            //threadControlBlocks[i] = EmptyStruct;
         }
     }
 

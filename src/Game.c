@@ -416,6 +416,7 @@ void CreateGame()
 
     // 5. Initialize the board (draw arena, players, scores)
     InitBoardState();
+    addHostThreads();
 
     // 6. Add GenerateBall, DrawObjects, ReadJoystickHost, SendDataToClient
     //      ReceiveDataFromClient, MoveLEDs (low priority), Idle
@@ -867,7 +868,7 @@ void EndOfGameHost()
     setLedMode_lp3943( BLUE, 0x0000);
 
     // delay for 1 secondish
-    for (int i = 0; i < 100000; i++);
+    for (long long i = 0; i < 1000000; i++);
 
     writeGameMenuHost(LCD_WHITE);
     nextState = NA;   // set next game state to NA
@@ -980,7 +981,7 @@ void JoinGame()
     //      ReadJoystickClient, SendDataToHost, ReceiveDataFromHost, DrawObjects,
     //      MoveLEDs, Idle
     InitBoardState();
-
+  
     addClientThreads();
 
     // 6. Kill self.
@@ -1154,7 +1155,7 @@ void EndOfGameClient()
         setLedMode_lp3943( BLUE, 0x0000);
 
         // delay for 1 secondish
-        for (int i = 0; i < 100000; i++);
+        for (long long i = 0; i < 1000000; i++);
 
         writeGameMenuClient(LCD_WHITE);
 
