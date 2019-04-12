@@ -56,7 +56,7 @@ void LCD_initSPI()
     eUSCI_SPI_MasterConfig config;
     config.selectClockSource     = EUSCI_SPI_CLOCKSOURCE_SMCLK;
     config.clockSourceFrequency  = 12000000;
-    config.desiredSpiClock       = 4000000; // 16*125kHz sample rate
+    config.desiredSpiClock       = 12000000; // 16*125kHz sample rate
     config.msbFirst              = EUSCI_SPI_MSB_FIRST;
     config.clockPhase            = EUSCI_B_SPI_PHASE_DATA_CHANGED_ONFIRST_CAPTURED_ON_NEXT;
     config.clockPolarity         = EUSCI_SPI_CLOCKPOLARITY_INACTIVITY_HIGH;

@@ -1,4 +1,4 @@
-#define JAKE_HOTSPOT
+#define DANNY_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
@@ -56,7 +56,7 @@ typedef enum
 /*
  * Static IP address for host
  */
-#define CONFIG_IP       SL_IPV4_VAL(172,20,10,5)       /* Static IP to be configured */
+#define CONFIG_IP       SL_IPV4_VAL(172,20,10,6)       /* Static IP to be configured */
 #define AP_MASK         SL_IPV4_VAL(255,255,255,240)      /* Subnet Mask for the station */
 #define AP_GATEWAY      SL_IPV4_VAL(172,20,10,1)        /* Default Gateway address */
 #define AP_DNS          SL_IPV4_VAL(172,20,10,1)            /* DNS Server Address */

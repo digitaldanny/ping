@@ -1,4 +1,4 @@
-#define JAKE_HOTSPOT
+#define DANNY_HOTSPOT
 
 // PREPROCESSOR DIRECTIVES
 // Configurations dependent on which router the
