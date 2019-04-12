@@ -78,7 +78,8 @@ extern semaphore_t LEDREADY;
 
 /* Amount of allowable space for collisions with the sides of paddles */
 #define WIGGLE_ROOM                  2
-#define JOYSTICK_BIAS                0
+#define JOYSTICK_BIAS_HOST           500
+#define JOYSTICK_BIAS_CLIENT         350
 
 /* Value for velocities from contact with paddles */
 #define _1_3_PADDLE                  11

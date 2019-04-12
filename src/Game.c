@@ -254,14 +254,15 @@ void UpdateBallOnScreen(PrevBall_t * previousBall, Ball_t * currentBall, uint16_
     LCD_DrawRectangle(previousBall->CenterX, previousBall->CenterX + BALL_SIZE,
                       previousBall->CenterY, previousBall->CenterY + BALL_SIZE, BACK_COLOR);
 
+    // before erasing the original
+    previousBall->CenterX = currentBall->currentCenterX;
+    previousBall->CenterY = currentBall->currentCenterY;
     // draw the new ball next
     LCD_DrawRectangle(currentBall->currentCenterX, currentBall->currentCenterX + BALL_SIZE,
                       currentBall->currentCenterY, currentBall->currentCenterY + BALL_SIZE, outColor);
 
     // wrapping the data update doesn't allow the balls to update twice
-    // before erasing the original
-    previousBall->CenterX = currentBall->currentCenterX;
-    previousBall->CenterY = currentBall->currentCenterY;
+
 
     G8RTOS_SignalSemaphore(&LCDREADY);
 }
@@ -487,42 +488,16 @@ void ReceiveDataFromClient()
     }
 #endif
 #ifdef GAMESTATE
-    int16_t result = -1;
     while(1)
     {
         // if the response is greater than 0, valid data was returned
         // to the gamestate. If not, no valid data was returned and
         // thread is put to sleep to avoid deadlock.
-        do
-        {
-            G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
-            result = ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
-            G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-            sleep(1); // avoid deadlock
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        ReceiveData( (uint8_t*)&gamestate.player, sizeof(gamestate.player));
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
-        } while ( result < 0 );
-
-        // Once the host receives valid data from the client, it is allowed to
-        // increment the player position.
-
-        G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
-        // update the player's center
-        gamestate.players[1].currentCenter += gamestate.player.displacement;
-
-        // player center is too far to the left - limit it.
-        if ( gamestate.players[1].currentCenter - PADDLE_LEN_D2 <= ARENA_MIN_X )
-        {
-            gamestate.players[1].currentCenter = ARENA_MIN_X + PADDLE_LEN_D2 + 1;
-        }
-
-        // player center is too far to the right - limit it.
-        else if ( gamestate.players[1].currentCenter + PADDLE_LEN_D2 > ARENA_MAX_X )
-        {
-            gamestate.players[1].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
-        }
-        G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
-
-        sleep(5);
+        sleep(2);
     }
 #endif
 }
@@ -561,25 +536,28 @@ void ReadJoystickHost()
     {
         // moving average of the joystick inputs
         GetJoystickCoordinates(&joystick_x, &joystick_y);
-        avg = (avg + joystick_x + JOYSTICK_BIAS) >> 1;
+        avg = (avg + joystick_x + JOYSTICK_BIAS_HOST) >> 1;
 
         // use the joystick controls to increase and decrease
         // the player velocity
-        switch(avg) {
-        case -10000 ... -6000   : displacement = 10;   break;
-        case -5999 ... -4000    : displacement = 5;    break;
-        case -3999 ... -2000    : displacement = 3;    break;
-        case -1999 ... -750     : displacement = 1;    break;
-        case -749  ... 750      : displacement = 0;     break;
-        case 751   ... 2000     : displacement = -1;     break;
-        case 2001  ... 4000     : displacement = -3;     break;
-        case 4001  ... 6000     : displacement = -5;     break;
-        case 6001  ... 10000    : displacement = -10;    break;
-        default                 : displacement = 0;     break;
-        }
+//        switch(avg) {
+//        case -10000 ... -6000   : displacement = 10;   break;
+//        case -5999 ... -4000    : displacement = 5;    break;
+//        case -3999 ... -2000    : displacement = 3;    break;
+//        case -1999 ... -750     : displacement = 1;    break;
+//        case -749  ... 750      : displacement = 0;     break;
+//        case 751   ... 2000     : displacement = -1;     break;
+//        case 2001  ... 4000     : displacement = -3;     break;
+//        case 4001  ... 6000     : displacement = -5;     break;
+//        case 6001  ... 10000    : displacement = -10;    break;
+//        default                 : displacement = 0;     break;
+//        }
 
+        // The switch statement was causing about 500 ms of lag
+        displacement = -(avg >> 9);
         sleep(10);  // sleep before updating host's position to make it fair for client
 
+        // UPDATE JOYSTICK HOST ----------------------------------------------
         // move the player's center
         gamestate.players[0].currentCenter += displacement;
 
@@ -590,10 +568,31 @@ void ReadJoystickHost()
         }
 
         // player center is too far to the right - limit it.
-        else if ( gamestate.players[0].currentCenter + PADDLE_LEN_D2 > ARENA_MAX_X )
+        else if ( gamestate.players[0].currentCenter + PADDLE_LEN_D2 > ARENA_MAX_X - 1 )
         {
             gamestate.players[0].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
+
+
+        // UPDATE JOYSTICK CLIENT --------------------------------------------
+        // Once the host receives valid data from the client, it is allowed to
+        // increment the player position.
+        // G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
+        // update the player's center
+        gamestate.players[1].currentCenter += gamestate.player.displacement;
+
+        // player center is too far to the left - limit it.
+        if ( gamestate.players[1].currentCenter - PADDLE_LEN_D2 <= ARENA_MIN_X )
+        {
+            gamestate.players[1].currentCenter = ARENA_MIN_X + PADDLE_LEN_D2 + 1;
+        }
+
+        // player center is too far to the right - limit it.
+        else if ( gamestate.players[1].currentCenter + PADDLE_LEN_D2 > ARENA_MAX_X - 1 )
+        {
+            gamestate.players[1].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
+        }
+        // G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
 
         sleep(5);
     }
@@ -670,7 +669,7 @@ void MoveBall()
         if ( ball->alive == 0 )
         {
             previousBall->CenterX = 0;
-            previousBall->CenterY = 0;
+            previousBall->CenterY = 120;
             ball->alive = 1;
             ball->kill = 0;
             ball->color = LCD_WHITE;
@@ -1008,24 +1007,19 @@ void ReceiveDataFromHost()
 #endif
 #ifdef GAMESTATE
 
-    int16_t result = -1;
     while(1)
     {
 
-        do
-        {
-            // 1. Receive packet from the host
-            G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
-            result = ReceiveData( (_u8*)&gamestate, sizeof(gamestate));
-            G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
-            sleep(1);
-        } while ( result < 0 );
+        // 1. Receive packet from the host
+        G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
+        ReceiveData( (_u8*)&gamestate, sizeof(gamestate));
+        G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
         // 3. Check if the game is done. Add EndOfGameHost thread if done.
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
-        sleep(5);
+        sleep(2);
     }
 #endif
 }
@@ -1058,7 +1052,7 @@ void SendDataToHost()
         SendData( (_u8*)&client_player, HOST_IP_ADDR, sizeof(client_player) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
-        sleep(2);
+        sleep(5);
     }
 #endif
 }
@@ -1076,22 +1070,25 @@ void ReadJoystickClient()
     {
         // moving average of the joystick inputs
         GetJoystickCoordinates(&joystick_x, &joystick_y);
-        avg = (avg + joystick_x + JOYSTICK_BIAS) >> 1;
+        avg = (avg + joystick_x + JOYSTICK_BIAS_CLIENT) >> 1;
 
         // use the joystick controls to increase and decrease
         // the player velocity
-        switch(avg) {
-        case -10000 ... -6000   : displacement = 3;   break;
-        case -5999 ... -4000    : displacement = 2;    break;
-        case -3999 ... -2000    : displacement = 1;    break;
-        case -1999 ... -750     : displacement = 1;    break;
-        case -749  ... 750      : displacement = 0;     break;
-        case 751   ... 2000     : displacement = -1;     break;
-        case 2001  ... 4000     : displacement = -1;     break;
-        case 4001  ... 6000     : displacement = -2;     break;
-        case 6001  ... 10000    : displacement = 3;    break;
-        default                 : displacement = 0;     break;
-        }
+        // switch(avg) {
+        // case -10000 ... -6000   : displacement = 3;   break;
+        // case -5999 ... -4000    : displacement = 2;    break;
+        // case -3999 ... -2000    : displacement = 1;    break;
+        // case -1999 ... -750     : displacement = 1;    break;
+        // case -749  ... 750      : displacement = 0;     break;
+        // case 751   ... 2000     : displacement = -1;     break;
+        // case 2001  ... 4000     : displacement = -1;     break;
+        // case 4001  ... 6000     : displacement = -2;     break;
+        // case 6001  ... 10000    : displacement = -3;    break;
+        // default                 : displacement = 0;     break;
+        // }
+
+        // The switch statement was causing about 500 ms of lag
+        displacement = -(avg >> 9);
 
         // move the player's center
         client_player.displacement = displacement;
@@ -1208,23 +1205,41 @@ void DrawObjects()
             // update the parts that need to be redrawn.
             else
             {
-                G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
+                // G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
                 UpdatePlayerOnScreen( &prevPlayers[i], &gamestate.players[i]);
-                G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
+                // G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
             }
         }
 
         // Draw the ping pong balls ----------
+        // STATE MACHINE..
         for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
+
+            // ALIVE && !KILL = REDRAW STATE
             if(gamestate.balls[i].alive && !gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], gamestate.balls[i].color);
             }
-            else if(gamestate.balls[i].kill){
+
+            // ALIVE && KILL = KILL HOST STATE
+            else if(gamestate.balls[i].alive && gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], LCD_BLACK);
                 gamestate.balls[i].alive = 0;
-                gamestate.balls[i].kill = 0;
                 ballCount--;
             }
+
+            // !ALIVE && KILL = KILL CLIENT STATE
+            // Because our sleep is 20 ms which is very high, our while loop
+            // doesn't run again before the packet is sent. This allows the
+            // client to enter this state before the host enters this state
+            // and delete the ball on the client side.
+            else if ( !gamestate.balls[i].alive && gamestate.balls[i].kill )
+            {
+                UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], LCD_BLACK);
+                gamestate.balls[i].kill = 0;
+            }
+
+            // !ALIVE && !KILL = NULL STATE
+            // else do nothing .. (ALL 4 STATES ARE USED WITH THESE 2 BOOLEANS)
         }
 
         // Refresh rate --------------------
