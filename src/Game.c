@@ -155,7 +155,8 @@ void writeGameMenu( uint16_t Color )
  */
 playerType GetPlayerRole()
 {
-
+    if ( getLocalIP() == HOST_IP_ADDR ) return Host;
+    else                                return Client;
 }
 
 /*
@@ -1194,7 +1195,6 @@ void DrawObjects()
 
     while(1)
     {
-
         // Draw players --------------------
         for (int i = 0; i < playerCount; i++)
         {
