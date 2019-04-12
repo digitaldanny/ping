@@ -136,15 +136,29 @@ void writeMainMenu( uint16_t Color )
 }
 
 // Any animations or text used for the game menu is displayed with this function
-void writeGameMenu( uint16_t Color )
+void writeGameMenuHost( uint16_t Color )
 {
     LCD_Clear(LCD_BLACK);
 
     // signal semaphore
     G8RTOS_WaitSemaphore(&LCDREADY);
 
-    LCD_Text(MAX_SCREEN_X/2, MAX_SCREEN_Y/2-8, "B0 -> Next Game", Color);
-    LCD_Text(MAX_SCREEN_X/2, MAX_SCREEN_Y/2+8, "B2 -> End Game", Color);
+    LCD_Text(MAX_SCREEN_X/2 - 7*8, MAX_SCREEN_Y/2-8, "B0 -> Next Game", Color);
+    LCD_Text(MAX_SCREEN_X/2 - 7*8, MAX_SCREEN_Y/2+8, "B2 -> End Game", Color);
+
+    // signal semaphore
+    G8RTOS_SignalSemaphore(&LCDREADY);
+}
+
+// Any animations or text used for the game menu is displayed with this function
+void writeGameMenuClient( uint16_t Color )
+{
+    LCD_Clear(LCD_BLACK);
+
+    // signal semaphore
+    G8RTOS_WaitSemaphore(&LCDREADY);
+
+    LCD_Text(MAX_SCREEN_X/2 - 8*8, MAX_SCREEN_Y/2-4, "Waiting for Host", Color);
 
     // signal semaphore
     G8RTOS_SignalSemaphore(&LCDREADY);
@@ -300,10 +314,10 @@ void InitBoardState()
     char score_str[3] = {0, 0, 0};
 
     // draw the current score of the players
-    snprintf( score_str, 3, "%u", gamestate.overallScores[0] );
+    snprintf( score_str, 3, "%.2u", gamestate.overallScores[0] );
     LCD_Text(0, MAX_SCREEN_Y - 16 - 1, score_str, PLAYER_RED);
 
-    snprintf( score_str, 3, "%u", gamestate.overallScores[1] );
+    snprintf( score_str, 3, "%.2u", gamestate.overallScores[1] );
     LCD_Text(0, 0, score_str, PLAYER_BLUE);
 }
 
@@ -855,7 +869,7 @@ void EndOfGameHost()
     // delay for 1 secondish
     for (int i = 0; i < 100000; i++);
 
-    writeGameMenu(LCD_WHITE);
+    writeGameMenuHost(LCD_WHITE);
     nextState = NA;   // set next game state to NA
     buttons_init();
     while(nextState == NA);
@@ -1142,7 +1156,7 @@ void EndOfGameClient()
         // delay for 1 secondish
         for (int i = 0; i < 100000; i++);
 
-        writeGameMenu(LCD_WHITE);
+        writeGameMenuClient(LCD_WHITE);
 
         // WAIT TO RECEIVE MESSAGE FROM CLIENT HERE..
         do
@@ -1215,6 +1229,10 @@ void DrawObjects()
         // STATE MACHINE..
         for(int i = 0; i < MAX_NUM_OF_BALLS; i++){
 
+            // IF AT ORIGIN, THEN OFFSET Y TO NON OCCUPIED SPACE
+            if(previousBalls[i].CenterX < ARENA_MIN_X){
+                previousBalls[i].CenterY = 120;
+            }
             // ALIVE && !KILL = REDRAW STATE
             if(gamestate.balls[i].alive && !gamestate.balls[i].kill){
                 UpdateBallOnScreen(&previousBalls[i], &gamestate.balls[i], gamestate.balls[i].color);
