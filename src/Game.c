@@ -39,6 +39,8 @@ uint8_t playerCount = 2;
 uint8_t ballCount = 0;
 PrevBall_t previousBalls[MAX_NUM_OF_BALLS];
 gameNextState nextState = NA;   // set next game state to NA
+int16_t displacement = 160;
+
 
 // ======================      SEMAPHORES          ==========================
 semaphore_t CC3100_SEMAPHORE;
@@ -50,10 +52,10 @@ semaphore_t LEDREADY;
 
 void addHostThreads(){
     G8RTOS_AddThread( &GenerateBall, 20, 0xFFFFFFFF,          "GENERATE_BALL___" );
-    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
+    G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,           "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &ReadJoystickHost, 20, 0xFFFFFFFF,      "READ_JOYSTICK___" );
     G8RTOS_AddThread( &MoveLEDs, 20, 0xFFFFFFFF,              "MOVE_LEDS_______" );
-    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
+    G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,           "IDLE____________" );
 
     #ifdef MULTI
     G8RTOS_AddThread( &ReceiveDataFromClient, DEFAULT_PRIORITY, 0xFFFFFFFF, "RECEIVE_DATA____" );
@@ -62,24 +64,13 @@ void addHostThreads(){
 }
 
 void addClientThreads(){
-    G8RTOS_AddThread( &ReadJoystickClient, 20, 0xFFFFFFFF,                  "READ_JOYSTICK___" );
+    G8RTOS_AddThread( &ReadJoystickClient, DEFAULT_PRIORITY, 0xFFFFFFFF,    "READ_JOYSTICK___" );
     G8RTOS_AddThread( &SendDataToHost, DEFAULT_PRIORITY, 0xFFFFFFFF,        "SEND_DATA_______" );
     G8RTOS_AddThread( &ReceiveDataFromHost, DEFAULT_PRIORITY, 0xFFFFFFFF,   "RECEIVE_DATA____" );
     G8RTOS_AddThread( &DrawObjects, 10, 0xFFFFFFFF,                         "DRAW_OBJECTS____" );
     G8RTOS_AddThread( &MoveLEDs, 20, 0xFFFFFFFF,                            "MOVE_LEDS_______" );
     G8RTOS_AddThread( &IdleThread, 255, 0xFFFFFFFF,                         "IDLE____________" );
 }
-
-
-
-
-
-
-
-
-
-
-
 
 // This function copies over a gamestate into a new
 // packet to be sent over Wi-Fi.
@@ -393,7 +384,7 @@ void CreateGame()
 
     // 4. Acknowledge client to tell them they joined the game.
     gamestate.player.joined = true;
-    SendData( (_u8*)&gamestate.player, gamestate.player.IP_address, sizeof(gamestate.player) );
+    SendData( (_u8*)&gamestate, gamestate.player.IP_address, sizeof(gamestate) );
 
     // Wait for client to sync with host by acknowledging that
     // it received the host message.
@@ -445,6 +436,7 @@ void SendDataToClient()
 #ifdef GAMESTATE
     while(1)
     {
+
         // 2. Send packet
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
         SendData( (uint8_t*)&gamestate, gamestate.player.IP_address, sizeof(gamestate) );
@@ -457,7 +449,7 @@ void SendDataToClient()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameHost, 0, 0xFFFFFFFF, "END_OF_GAME_HOST");
 
-        sleep(2);
+        sleep(5);
     }
 #endif
 }
@@ -509,6 +501,10 @@ void ReceiveDataFromClient()
 
         } while ( result < 0 );
 
+        // Once the host receives valid data from the client, it is allowed to
+        // increment the player position.
+
+        G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
         // update the player's center
         gamestate.players[1].currentCenter += gamestate.player.displacement;
 
@@ -523,7 +519,7 @@ void ReceiveDataFromClient()
         {
             gamestate.players[1].currentCenter = ARENA_MAX_X - PADDLE_LEN_D2 - 1;
         }
-
+        G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
 
         sleep(5);
     }
@@ -916,12 +912,12 @@ void JoinGame()
     initCC3100(Client); // connect to the network
 
     // 1. Set initial SpecificPlayerInfo_t strict attributes ( getLocalIP() ).
-    gamestate.player.IP_address = getLocalIP();
-    gamestate.player.acknowledge = false;
-    gamestate.player.displacement = 0;
-    gamestate.player.joined = false;
-    gamestate.player.playerNumber = playerCount;
-    gamestate.player.ready = false;
+    client_player.IP_address = getLocalIP();
+    client_player.acknowledge = false;
+    client_player.displacement = 0;
+    client_player.joined = false;
+    client_player.playerNumber = playerCount;
+    client_player.ready = false;
 
     // hardware initialization
     P2->OUT &= ~(BIT0 | BIT1 | BIT2); // initialize led's off
@@ -951,14 +947,14 @@ void JoinGame()
     // client that they joined the game.
     do
     {
-        SendData(       (uint8_t*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );   // start handshake
-        ReceiveData(    (uint8_t*)&gamestate.player, sizeof(gamestate.player) );   // check if host acknowledges
+        SendData(       (uint8_t*)&client_player, HOST_IP_ADDR, sizeof(client_player) );   // start handshake
+        ReceiveData(    (uint8_t*)&gamestate, sizeof(gamestate) );   // check if host acknowledges
     } while( gamestate.player.joined == false );
 
     // 4. Acknowledge client to tell them they have received
     // the message about joining the game and the game can begin.
-    gamestate.player.acknowledge = true;
-    SendData( (uint8_t*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
+    client_player.acknowledge = true;
+    SendData( (uint8_t*)&client_player, HOST_IP_ADDR, sizeof(client_player) );
 
 #endif
 
@@ -1028,7 +1024,7 @@ void ReceiveDataFromHost()
         if ( gamestate.gameDone == true )
             G8RTOS_AddThread(EndOfGameClient, 0, 0xFFFFFFFF, "END_GAME_CLIENT_");
 
-        sleep(2);
+        sleep(5);
     }
 #endif
 }
@@ -1058,10 +1054,10 @@ void SendDataToHost()
     while(1)
     {
         G8RTOS_WaitSemaphore(&CC3100_SEMAPHORE);
-        SendData( (_u8*)&gamestate.player, HOST_IP_ADDR, sizeof(gamestate.player) );
+        SendData( (_u8*)&client_player, HOST_IP_ADDR, sizeof(client_player) );
         G8RTOS_SignalSemaphore(&CC3100_SEMAPHORE);
 
-        sleep(5);
+        sleep(2);
     }
 #endif
 }
@@ -1074,7 +1070,6 @@ void ReadJoystickClient()
     int16_t avg = 0;
     int16_t joystick_x = 0;
     int16_t joystick_y = 0;
-    int16_t displacement = 0;
 
     while(1)
     {
@@ -1085,20 +1080,20 @@ void ReadJoystickClient()
         // use the joystick controls to increase and decrease
         // the player velocity
         switch(avg) {
-        case -10000 ... -6000   : displacement = 10;   break;
-        case -5999 ... -4000    : displacement = 5;    break;
-        case -3999 ... -2000    : displacement = 3;    break;
+        case -10000 ... -6000   : displacement = 3;   break;
+        case -5999 ... -4000    : displacement = 2;    break;
+        case -3999 ... -2000    : displacement = 1;    break;
         case -1999 ... -750     : displacement = 1;    break;
         case -749  ... 750      : displacement = 0;     break;
         case 751   ... 2000     : displacement = -1;     break;
-        case 2001  ... 4000     : displacement = -3;     break;
-        case 4001  ... 6000     : displacement = -5;     break;
-        case 6001  ... 10000    : displacement = -10;    break;
+        case 2001  ... 4000     : displacement = -1;     break;
+        case 4001  ... 6000     : displacement = -2;     break;
+        case 6001  ... 10000    : displacement = 3;    break;
         default                 : displacement = 0;     break;
         }
 
         // move the player's center
-        gamestate.player.displacement = displacement;
+        client_player.displacement = displacement;
 
         sleep(10);
     }
@@ -1157,6 +1152,10 @@ void EndOfGameClient()
             ReceiveData((uint8_t*)&gamestate, sizeof(gamestate));
         } while ( gamestate.gameDone == true );
 
+        // defines the client player's starting center value because we
+        // treat the displacement as a center value.
+        client_player.displacement = gamestate.players[1].currentCenter;
+
         if(gamestate.winner == true){
 
             // thanks for playing
@@ -1209,7 +1208,9 @@ void DrawObjects()
             // update the parts that need to be redrawn.
             else
             {
+                G8RTOS_WaitSemaphore(&GAMESTATE_SEMAPHORE);
                 UpdatePlayerOnScreen( &prevPlayers[i], &gamestate.players[i]);
+                G8RTOS_SignalSemaphore(&GAMESTATE_SEMAPHORE);
             }
         }
 
