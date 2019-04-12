@@ -194,7 +194,7 @@ void SysTick_Handler()
         CurrentlyRunningPeriodicThread = CurrentlyRunningPeriodicThread->next;
 
         // run the periodic function if it meets the correct system time
-        if ( CurrentlyRunningPeriodicThread->exec_time == SystemTime )
+        if ( CurrentlyRunningPeriodicThread->exec_time <= SystemTime )
         {
             CurrentlyRunningPeriodicThread->exec_time = SystemTime + CurrentlyRunningPeriodicThread->period;
             CurrentlyRunningPeriodicThread->handler();
@@ -211,7 +211,7 @@ void SysTick_Handler()
         CurrentlyRunningThread = CurrentlyRunningThread->next;
 
         // clear the sleep statement if it is the correct time
-        if ( CurrentlyRunningThread->sleep_count == SystemTime )
+        if ( CurrentlyRunningThread->sleep_count <= SystemTime )
         {
             CurrentlyRunningThread->asleep = 0x0;
             CurrentlyRunningThread->sleep_count = 0x0;
