@@ -316,7 +316,6 @@ sched_err_code_t G8RTOS_Launch_Priority()
 // KillThread function takes in a threadId and removes it from the linked list
 // of threads
 
-static const struct tcb EmptyStruct;
 uint8_t threadNUM = 0;
 sched_err_code_t G8RTOS_KillThread( threadId_t id )
 {
