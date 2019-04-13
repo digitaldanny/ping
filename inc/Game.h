@@ -81,7 +81,7 @@ extern uint8_t     GameInitMode;    // determines if the buttons are used as gam
 
 /* Amount of allowable space for collisions with the sides of paddles */
 #define WIGGLE_ROOM                  2
-#define JOYSTICK_BIAS_HOST           500
+#define JOYSTICK_BIAS_HOST           720
 #define JOYSTICK_BIAS_CLIENT         350
 
 /* Value for velocities from contact with paddles */

@@ -823,7 +823,7 @@ void EndOfGameHost()
     G8RTOS_KillAllOthers();
   
     // force semaphores to reset here..
-  // shouldn't be required, but fixes semaphore block bug
+    // shouldn't be required, but fixes semaphore block bug
     G8RTOS_InitSemaphore(&LCDREADY, 1);
     G8RTOS_InitSemaphore(&LEDREADY, 1);
     G8RTOS_InitSemaphore(&CC3100_SEMAPHORE, 1);
@@ -1262,7 +1262,7 @@ void DrawObjects()
         }
 
         // Refresh rate --------------------
-        sleep(20);
+        sleep(25);
     }
 }
 
