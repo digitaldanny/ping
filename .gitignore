@@ -1,6 +1,9 @@
 # Prerequisites
 *.d
 
+# folders
+skeleton
+
 # Object files
 *.o
 *.ko
