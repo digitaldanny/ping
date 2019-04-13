@@ -63,6 +63,21 @@ typedef enum
 #define SL_STOP_TIMEOUT        0xFF
 #endif
 
+#ifdef DANNY_COMP
+#define HOST_IP_ADDR           0xC0A889F8               // IP address of server to connect to
+#define PORT_NUM               5001                     // Port number to be used
+#define NO_OF_PACKETS          1                        // Number of packets to send out
+
+/*
+ * Static IP address for host
+ */
+#define CONFIG_IP       SL_IPV4_VAL(192,168,137,248)       /* Static IP to be configured */
+#define AP_MASK         SL_IPV4_VAL(255,255,255,0)      /* Subnet Mask for the station */
+#define AP_GATEWAY      SL_IPV4_VAL(192,168,137,1)        /* Default Gateway address */
+#define AP_DNS          SL_IPV4_VAL(192,168,137,1)            /* DNS Server Address */
+#define SL_STOP_TIMEOUT        0xFF
+#endif
+
 #ifdef JAKE_HOTSPOT
 #define HOST_IP_ADDR           0xAC140A07               // IP address of server to connect to
 #define PORT_NUM               5001                     // Port number to be used
